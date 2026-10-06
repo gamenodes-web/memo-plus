@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,maximum-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="メモ+">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<title>メモ+</title>
+<style>
+/* Layout: iOS-style navigation stack (folders → list → note), each screen a full-height scroller with its own nav bar and bottom toolbar. */
+:root{
+  --bg:#f2f2f7; --cell:#ffffff; --paper:#ffffff; --label:#000000; --sec:#8a8a8e; --ter:#c4c4c7;
+  --sep:#d1d1d6; --fill:rgba(118,118,128,.12); --accent:#d39e00; --danger:#ff3b30; --pin:#ff9500; --blue:#0a7aff;
+  --nav:rgba(242,242,247,.86); --navpaper:rgba(255,255,255,.88); --dim:rgba(0,0,0,.35);
+  --h0:#e8590c; --h1:#1c7ed6; --h2:#2f9e44; --h3:#d6336c; --h4:#7048e8; --h5:#c99700; --h6:#0c8599; --h7:#868e96;
+  --font:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#000000; --cell:#1c1c1e; --paper:#000000; --label:#ffffff; --sec:#8d8d93; --ter:#48484a;
+  --sep:#38383a; --fill:rgba(118,118,128,.24); --accent:#ffd60a; --danger:#ff453a; --pin:#ff9f0a; --blue:#0a84ff;
+  --nav:rgba(18,18,18,.86); --navpaper:rgba(0,0,0,.86); --dim:rgba(0,0,0,.55);
+  --h0:#ff8a4c; --h1:#5aa9ff; --h2:#5fd27a; --h3:#ff7aa8; --h4:#a891ff; --h5:#ffd43b; --h6:#3fd0e0; --h7:#adb5bd;
+  color-scheme:dark}}
+
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--label);font-family:var(--font);font-size:17px;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg{display:block}
+#app{position:fixed;inset:0;overflow:hidden}
+
+/* ---------- screens ---------- */
+.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;background:var(--bg);transition:transform .38s cubic-bezier(.2,.8,.2,1),filter .38s;will-change:transform;padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+.screen.paper{background:var(--paper)}
+.screen.enter{transform:translateX(100%)}
+.screen.under{transform:translateX(-28%);filter:brightness(.92)}
+.screen.dragging{transition:none}
+@media (prefers-reduced-motion:reduce){.screen{transition:none}}
+
+.nav{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px) + 6px) 12px 6px;min-height:calc(env(safe-area-inset-top,0px) + 50px);background:var(--nav);-webkit-backdrop-filter:saturate(180%) blur(18px);backdrop-filter:saturate(180%) blur(18px);border-bottom:.5px solid transparent;transition:border-color .2s}
+.paper .nav{background:var(--navpaper)}
+.nav.scrolled{border-bottom-color:var(--sep)}
+.nav .l{display:flex;justify-content:flex-start;min-width:0}
+.nav .r{display:flex;justify-content:flex-end;gap:18px;align-items:center}
+.nav .t{font-weight:600;font-size:17px;opacity:0;transition:opacity .2s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
+.nav.scrolled .t{opacity:1}
+.navbtn{color:var(--accent);display:inline-flex;align-items:center;gap:4px;font-size:17px;min-height:36px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.navbtn.bold{font-weight:600}
+.navbtn svg{flex:none}
+
+.big{font-size:34px;font-weight:700;letter-spacing:.01em;margin:2px 16px 10px;line-height:1.15;word-break:break-word}
+.big.tagtitle{color:var(--tc)}
+.search{margin:0 16px 14px;display:flex;align-items:center;gap:6px;background:var(--fill);border-radius:10px;padding:0 8px;height:36px;color:var(--sec)}
+.search input{flex:1;min-width:0;border:0;background:none;outline:none;font-size:17px;color:var(--label);height:100%}
+.search input::placeholder{color:var(--sec)}
+
+.sechead{display:flex;align-items:center;justify-content:space-between;margin:22px 32px 6px;font-size:20px;font-weight:700}
+.sechead.small{font-size:13px;font-weight:400;color:var(--sec);text-transform:uppercase;margin:18px 32px 6px}
+.group{margin:0 16px;background:var(--cell);border-radius:10px;overflow:hidden}
+.row{position:relative;display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:10px 16px;text-align:left;background:var(--cell)}
+.swipe + .swipe::before{content:"";position:absolute;top:0;left:20px;right:0;border-top:.5px solid var(--sep);z-index:1}
+.row + .row::before{content:"";position:absolute;top:0;left:52px;right:0;border-top:.5px solid var(--sep);z-index:1}
+.row .ic{color:var(--accent);flex:none;width:26px;display:flex;justify-content:center}
+.row .lb{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .ct{color:var(--sec);font-variant-numeric:tabular-nums}
+.row .chev{color:var(--ter)}
+.row.today .lb{font-weight:600}
+.row .del{color:var(--danger)}
+.row:active{background:var(--fill)}
+
+.tagcloud{display:flex;flex-wrap:wrap;gap:8px;margin:0 16px}
+.chip{--tc:var(--h7);display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 12px;font-size:15px;background:color-mix(in srgb,var(--tc) 16%,var(--cell));color:var(--label);border:1px solid color-mix(in srgb,var(--tc) 40%,transparent);white-space:nowrap}
+.chip .dot{width:9px;height:9px;border-radius:50%;background:var(--tc);flex:none}
+.chip .n{color:var(--sec);font-size:13px;font-variant-numeric:tabular-nums}
+.chip.sm{padding:1px 8px;font-size:12px;gap:4px}
+.chip.sm .dot{width:7px;height:7px}
+
+/* note rows with swipe */
+.swipe{position:relative;overflow:hidden;background:var(--danger)}
+.swipe .acts{position:absolute;inset:0 0 0 auto;display:flex}
+.swipe .acts button{width:72px;color:#fff;font-size:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
+.swipe .acts .a-pin{background:var(--pin)}
+.swipe .acts .a-move{background:#5e5ce6}
+.swipe .acts .a-del{background:var(--danger)}
+.swipe .acts .a-restore{background:var(--blue)}
+.nrow{position:relative;display:block;width:100%;text-align:left;background:var(--cell);padding:11px 16px 11px 20px;transition:transform .25s ease;touch-action:pan-y}
+.nrow.drag{transition:none}
+.nrow .tt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
+.nrow .tt .pinic{color:var(--pin);flex:none}
+.nrow .sub{display:flex;gap:8px;color:var(--sec);font-size:15px;margin-top:1px;min-width:0}
+.nrow .sub .d{flex:none;font-variant-numeric:tabular-nums;color:var(--label);opacity:.75}
+.nrow .sub .p{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nrow .dots{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+.nrow .fold{display:flex;align-items:center;gap:4px;color:var(--sec);font-size:13px;margin-top:3px}
+.nrow:active{background:var(--fill)}
+.swipe.flash .nrow{background:color-mix(in srgb,var(--accent) 20%,var(--cell))}
+
+/* tag line rows */
+.lrow{display:block;width:100%;text-align:left;background:var(--cell);padding:12px 16px 12px 18px;border-left:4px solid var(--tc,var(--h7));position:relative}
+.lrow + .lrow{border-top:.5px solid var(--sep)}
+.lrow .tx{white-space:pre-wrap;word-break:break-word}
+.lrow .mt{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;color:var(--sec);font-size:13px}
+.lrow .mt .tm{font-variant-numeric:tabular-nums}
+.lrow:active{background:var(--fill)}
+.daylabel{margin:18px 32px 6px;font-size:13px;color:var(--sec);font-weight:600}
+
+.seg{display:flex;margin:0 16px 8px;background:var(--fill);border-radius:9px;padding:2px}
+.seg button{flex:1;padding:6px 0;border-radius:7px;font-size:14px;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--cell);box-shadow:0 1px 3px rgba(0,0,0,.15)}
+
+.empty{color:var(--sec);text-align:center;padding:48px 32px;line-height:1.7;font-size:15px}
+.empty b{color:var(--label);display:block;font-size:20px;margin-bottom:6px}
+.empty code{font-family:var(--font);background:var(--fill);border-radius:6px;padding:1px 6px;color:var(--label)}
+.note{color:var(--sec);font-size:13px;margin:8px 32px 0;line-height:1.5}
+
+/* bottom toolbar */
+.tbar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:8px 18px calc(8px + env(safe-area-inset-bottom,0px));background:var(--nav);-webkit-backdrop-filter:saturate(180%) blur(18px);backdrop-filter:saturate(180%) blur(18px);border-top:.5px solid var(--sep);color:var(--accent)}
+.paper .tbar{background:var(--navpaper)}
+.tbar .mid{color:var(--label);font-size:12px}
+.tbar button{min-width:36px;min-height:36px;display:flex;align-items:center;justify-content:center;color:var(--accent)}
+.tbar button:disabled{color:var(--ter)}
+
+/* editor */
+.when{text-align:center;color:var(--sec);font-size:13px;margin:4px 0 6px}
+.editor{min-height:60vh;padding:0 20px 40vh;outline:none;line-height:1.5;font-size:17px;word-break:break-word;caret-color:var(--accent)}
+.editor > *{margin:0}
+.editor > :first-child{font-size:28px;font-weight:700;line-height:1.25;margin-bottom:6px}
+.editor h1{font-size:28px;font-weight:700;line-height:1.25}
+.editor h2{font-size:22px;font-weight:700}
+.editor h3{font-size:19px;font-weight:600}
+.editor pre{font-family:var(--mono);font-size:15px;white-space:pre-wrap;background:var(--fill);border-radius:6px;padding:2px 6px}
+.editor ul,.editor ol{padding-left:28px}
+.editor ul.dash{list-style:none}
+.editor ul.dash > li::before{content:"–";position:absolute;margin-left:-18px}
+.editor img{max-width:100%;height:auto;border-radius:10px;display:block;margin:6px 0}
+.editor a{color:var(--accent)}
+.editor .tag{color:var(--tc,var(--accent));font-weight:600;background:color-mix(in srgb,var(--tc,var(--accent)) 14%,transparent);border-radius:5px;padding:0 2px}
+.editor .tagged{box-shadow:inset 3px 0 0 var(--tc);padding-left:10px;margin-left:-13px;border-radius:2px}
+.editor .ck{position:relative;padding-left:32px;min-height:1.5em}
+.editor .ck::before{content:"";position:absolute;left:2px;top:.18em;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ter);box-sizing:border-box}
+.editor .ck[data-done="1"]::before{background:var(--accent);border-color:var(--accent)}
+.editor .ck[data-done="1"]::after{content:"";position:absolute;left:9px;top:calc(.18em + 4px);width:5px;height:10px;border:solid var(--paper);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.editor .ck[data-done="1"]{color:var(--sec)}
+.editor .ck.tagged{padding-left:42px}
+.editor .ck.tagged::before{left:12px}
+.editor .ck.tagged[data-done="1"]::after{left:19px}
+.editor .flash{animation:flash 1.6s ease}
+@keyframes flash{0%,40%{background:color-mix(in srgb,var(--accent) 35%,transparent)}100%{background:transparent}}
+.editor:empty::before{content:"書きなぐる…";color:var(--ter)}
+
+.ktbar{position:fixed;left:0;right:0;bottom:0;z-index:25;display:none;align-items:center;justify-content:space-around;padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px));background:var(--navpaper);-webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px);border-top:.5px solid var(--sep)}
+.ktbar.on{display:flex}
+.ktbar.kb{padding-bottom:6px}
+.ktbar button{color:var(--accent);min-width:40px;min-height:36px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:16px;border-radius:8px}
+.ktbar button.on{background:var(--fill)}
+.panel{position:fixed;left:8px;right:8px;z-index:26;background:var(--cell);border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.25);padding:12px;display:none}
+.panel.on{display:block}
+.panel .ttl{display:flex;justify-content:space-between;align-items:center;font-weight:600;margin-bottom:10px}
+.panel .styles{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+.panel .styles button{flex:none;padding:6px 12px;border-radius:8px;background:var(--fill)}
+.panel .styles .s-title{font-weight:700;font-size:20px}
+.panel .styles .s-h{font-weight:700}
+.panel .styles .s-sh{font-weight:600;font-size:15px}
+.panel .styles .s-mono{font-family:var(--mono);font-size:14px}
+.panel .rowbtns{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px}
+.panel .rowbtns button{background:var(--fill);border-radius:8px;height:40px;display:flex;align-items:center;justify-content:center}
+.panel .tagpick{display:flex;flex-wrap:wrap;gap:8px;max-height:30vh;overflow-y:auto}
+.panel .newtag{display:flex;gap:6px;margin-top:10px}
+.panel .newtag input{flex:1;min-width:0;border:0;background:var(--fill);border-radius:8px;padding:8px 10px;font-size:16px}
+.panel .newtag button{color:var(--accent);font-weight:600;padding:0 8px}
+
+/* sheets & dialogs */
+.overlay{position:fixed;inset:0;z-index:50;background:var(--dim);display:flex;flex-direction:column;justify-content:flex-end;padding:8px 8px calc(8px + env(safe-area-inset-bottom,0px));animation:fade .2s}
+.overlay.center{justify-content:center;align-items:center;padding:24px}
+@keyframes fade{from{opacity:0}}
+.sheet{display:grid;gap:8px;animation:up .25s cubic-bezier(.2,.8,.2,1)}
+@keyframes up{from{transform:translateY(40px);opacity:0}}
+.sheet .grp{background:var(--cell);border-radius:14px;overflow:hidden}
+.sheet .msg{padding:14px 16px;text-align:center;color:var(--sec);font-size:13px;border-bottom:.5px solid var(--sep)}
+.sheet .grp button{display:block;width:100%;padding:16px;color:var(--blue);font-size:19px;text-align:center}
+.sheet .grp button + button{border-top:.5px solid var(--sep)}
+.sheet .grp button.danger{color:var(--danger)}
+.sheet .cancel{font-weight:600}
+.dialog{background:var(--cell);border-radius:14px;width:min(300px,100%);overflow:hidden;text-align:center;animation:pop .2s}
+@keyframes pop{from{transform:scale(1.1);opacity:0}}
+.dialog h3{margin:18px 16px 4px;font-size:17px}
+.dialog p{margin:0 16px 12px;font-size:13px;color:var(--sec)}
+.dialog input{width:calc(100% - 32px);margin:0 16px 16px;border:.5px solid var(--sep);border-radius:8px;padding:8px;background:var(--paper);font-size:16px}
+.dialog .btns{display:flex;border-top:.5px solid var(--sep)}
+.dialog .btns button{flex:1;padding:12px;color:var(--blue);font-size:17px}
+.dialog .btns button + button{border-left:.5px solid var(--sep);font-weight:600}
+.swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:4px 20px 18px}
+.swatches button{aspect-ratio:1;border-radius:50%;background:var(--tc);max-width:100%}
+.swatches button[aria-pressed="true"]{box-shadow:0 0 0 3px var(--cell),0 0 0 5px var(--tc)}
+
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 56px);transform:translate(-50%,-10px);z-index:60;background:var(--label);color:var(--paper);padding:8px 16px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;max-width:calc(100% - 32px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="imgpick" accept="image/*" hidden>
+<input type="file" id="importpick" accept="application/json,.json" hidden>
+
+<script>
+"use strict";
+/* =========================================================
+   メモ+ — iPhone純正メモの使い勝手 + 行ごとのタグ分類
+   ========================================================= */
+
+// ---------- icons ----------
+const I = {
+  back:'<svg viewBox="0 0 12 21" width="12" height="21"><path d="M10.5 1.5 2 10.5l8.5 9" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  chev:'<svg viewBox="0 0 8 14" width="8" height="14"><path d="M1.5 1.5 6.5 7l-5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  compose:'<svg viewBox="0 0 26 26" width="26" height="26"><path d="M12 4.5H7A2.5 2.5 0 0 0 4.5 7v12A2.5 2.5 0 0 0 7 21.5h12a2.5 2.5 0 0 0 2.5-2.5v-5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M19.6 3.4a2.1 2.1 0 0 1 3 3l-9.3 9.3-4 1 1-4z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>',
+  folderPlus:'<svg viewBox="0 0 28 24" width="28" height="24"><path d="M2.5 6.5a2 2 0 0 1 2-2h6l2.2 2.5h10.8a2 2 0 0 1 2 2v10.5a2 2 0 0 1-2 2h-19a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 10.5v7M10.5 14h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  folder:'<svg viewBox="0 0 26 22" width="24" height="20"><path d="M2 5.5a2 2 0 0 1 2-2h6l2.2 2.5H22a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+  allnotes:'<svg viewBox="0 0 26 22" width="24" height="20"><path d="M2 5.5a2 2 0 0 1 2-2h6l2.2 2.5H22a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M7 11.5h12M7 15h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  cal:'<svg viewBox="0 0 24 24" width="22" height="22"><rect x="3" y="4.5" width="18" height="16" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="15" r="2" fill="currentColor"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" width="22" height="22"><path d="M4 6.5h16M9.5 6.5V4.5h5v2M6 6.5l1 13a1.6 1.6 0 0 0 1.6 1.5h6.8A1.6 1.6 0 0 0 17 19.5l1-13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  more:'<svg viewBox="0 0 26 26" width="26" height="26"><circle cx="13" cy="13" r="11" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="8" cy="13" r="1.6" fill="currentColor"/><circle cx="13" cy="13" r="1.6" fill="currentColor"/><circle cx="18" cy="13" r="1.6" fill="currentColor"/></svg>',
+  share:'<svg viewBox="0 0 22 26" width="22" height="26"><path d="M11 16V2.5M6.5 7 11 2.5 15.5 7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 10.5H4.5a1.5 1.5 0 0 0-1.5 1.5v10a1.5 1.5 0 0 0 1.5 1.5h13a1.5 1.5 0 0 0 1.5-1.5V12a1.5 1.5 0 0 0-1.5-1.5H15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+  check:'<svg viewBox="0 0 24 24" width="24" height="24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m7.5 12.3 3 3 6-6.3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  camera:'<svg viewBox="0 0 26 22" width="26" height="22"><path d="M3 7.5a2 2 0 0 1 2-2h3l1.8-2.5h6.4L18 5.5h3a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="13" cy="12.5" r="4" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+  hash:'<svg viewBox="0 0 24 24" width="22" height="22"><path d="M9.5 3.5 7.5 20.5M16.5 3.5l-2 17M4 8.5h17M3 15.5h17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>',
+  list:'<svg viewBox="0 0 24 24" width="24" height="24"><circle cx="5" cy="6.5" r="1.5" fill="currentColor"/><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="5" cy="17.5" r="1.5" fill="currentColor"/><path d="M9.5 6.5h11M9.5 12h11M9.5 17.5h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  olist:'<svg viewBox="0 0 24 24" width="24" height="24"><text x="2" y="9" font-size="7" font-family="sans-serif" fill="currentColor">1.</text><text x="2" y="15" font-size="7" font-family="sans-serif" fill="currentColor">2.</text><text x="2" y="21" font-size="7" font-family="sans-serif" fill="currentColor">3.</text><path d="M10 6.5h10.5M10 12.5h10.5M10 18.5h10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  dlist:'<svg viewBox="0 0 24 24" width="24" height="24"><path d="M3 6.5h3M3 12h3M3 17.5h3M9.5 6.5h11M9.5 12h11M9.5 17.5h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  pin:'<svg viewBox="0 0 20 20" width="14" height="14"><path d="M7 2h6l-1 5 3 3H5l3-3zM10 10v8" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  pinL:'<svg viewBox="0 0 20 20" width="20" height="20"><path d="M7 2h6l-1 5 3 3H5l3-3zM10 10v8" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>',
+  moveL:'<svg viewBox="0 0 26 22" width="22" height="20"><path d="M2 5.5a2 2 0 0 1 2-2h6l2.2 2.5H22a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z" fill="currentColor"/></svg>',
+  trashL:'<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 6.5h16M9.5 6.5V4.5h5v2M6 6.5l1 13a1.6 1.6 0 0 0 1.6 1.5h6.8A1.6 1.6 0 0 0 17 19.5l1-13z" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>',
+  restoreL:'<svg viewBox="0 0 24 24" width="20" height="20"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 3.5v5h5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  search:'<svg viewBox="0 0 20 20" width="16" height="16"><circle cx="8.5" cy="8.5" r="6" fill="none" stroke="currentColor" stroke-width="2"/><path d="m13 13 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  backup:'<svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  restore:'<svg viewBox="0 0 24 24" width="22" height="22"><path d="M12 15V3M7.5 7.5 12 3l4.5 4.5M4 17v2.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+
+// ---------- tiny DOM helper ----------
+function h(tag, props, ...kids){
+  const e = document.createElement(tag);
+  if (props) for (const k in props){
+    const v = props[k];
+    if (v == null || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k === "html") e.innerHTML = v;
+    else if (k === "style") e.style.cssText = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else if (k.startsWith("--")) e.style.setProperty(k, v);
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : document.createTextNode(c));
+  return e;
+}
+const $ = s => document.querySelector(s);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+// ---------- storage (IndexedDB) ----------
+const idb = {
+  db: null,
+  open(){
+    return new Promise((res, rej) => {
+      const r = indexedDB.open("memo-plus", 1);
+      r.onupgradeneeded = () => { for (const s of ["notes","folders","meta"]) if (!r.result.objectStoreNames.contains(s)) r.result.createObjectStore(s, {keyPath:"id"}); };
+      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  tx(store, mode, fn){
+    if (!this.db) return Promise.resolve(mode === "readonly" ? [] : undefined);
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(store, mode); const os = t.objectStore(store);
+      const req = fn(os); t.oncomplete = () => res(req && req.result); t.onerror = () => rej(t.error);
+    });
+  },
+  all(s){ return this.tx(s, "readonly", os => os.getAll()); },
+  put(s, v){ return this.tx(s, "readwrite", os => os.put(v)); },
+  del(s, id){ return this.tx(s, "readwrite", os => os.delete(id)); },
+};
+
+// ---------- state ----------
+const SYS = { notes:"notes", daily:"daily" };
+const S = { notes:[], folders:[], tagColors:{} };
+const TAG_RE = /[#＃]([^\s#＃.,、。!！?？()（）「」『』\[\]【】]+)/g;
+const PALETTE = 8;
+
+function noteById(id){ return S.notes.find(n => n.id === id); }
+function folderName(id){
+  if (id === "all") return "すべてのメモ";
+  if (id === "trash") return "最近削除した項目";
+  const f = S.folders.find(f => f.id === id); return f ? f.name : "メモ";
+}
+function liveNotes(){ return S.notes.filter(n => !n.deletedAt); }
+function tagColor(tag){
+  if (S.tagColors[tag] != null) return "var(--h" + S.tagColors[tag] + ")";
+  let x = 0; for (const ch of tag) x = (x * 31 + ch.codePointAt(0)) >>> 0;
+  return "var(--h" + (x % 7) + ")";
+}
+function tagIndex(tag){
+  if (S.tagColors[tag] != null) return S.tagColors[tag];
+  let x = 0; for (const ch of tag) x = (x * 31 + ch.codePointAt(0)) >>> 0; return x % 7;
+}
+function allTags(){
+  const m = new Map();
+  for (const n of liveNotes()) for (const l of n.lines || []) for (const t of l.tags){
+    const e = m.get(t) || {tag:t, lines:0, last:0}; e.lines++; e.last = Math.max(e.last, l.t || n.updatedAt); m.set(t, e);
+  }
+  return [...m.values()].sort((a, b) => b.last - a.last);
+}
+
+// ---------- note text analysis ----------
+function blocksOf(root){
+  const out = [];
+  for (const n of root.childNodes){
+    if (n.nodeType === 3){ if (n.textContent.trim()) out.push(n); }
+    else if (n.nodeName === "UL" || n.nodeName === "OL"){ for (const li of n.children) out.push(li); }
+    else if (n.nodeType === 1) out.push(n);
+  }
+  return out;
+}
+function tagsIn(text){ const t = []; for (const m of text.matchAll(TAG_RE)) if (!t.includes(m[1])) t.push(m[1]); return t; }
+function stripTags(text){ return text.replace(TAG_RE, "").replace(/[ \t　 ]+/g, " ").trim(); }
+function derive(note){
+  const box = document.createElement("div"); box.innerHTML = note.html || "";
+  const blocks = blocksOf(box);
+  const texts = []; const lines = []; let hasImg = !!box.querySelector("img");
+  blocks.forEach((b, i) => {
+    const text = (b.textContent || "").replace(/​/g, "").trim();
+    if (text) texts.push(text);
+    const tags = tagsIn(text);
+    if (tags.length) lines.push({ t: +(b.dataset && b.dataset.t) || note.updatedAt || note.createdAt, text, tags, i, done: b.dataset && b.dataset.done === "1" });
+  });
+  note.title = texts[0] ? stripTags(texts[0]) || texts[0] : (hasImg ? "画像" : "新規メモ");
+  note.preview = texts.slice(1).join(" ").slice(0, 120) || (hasImg ? "画像" : "追加テキストなし");
+  note.lines = lines;
+  note.tags = [...new Set(lines.flatMap(l => l.tags))];
+  note.empty = !texts.length && !hasImg;
+  return note;
+}
+
+// ---------- dates ----------
+const WD = ["日","月","火","水","木","金","土"];
+function startOfDay(t){ const d = new Date(t); d.setHours(0,0,0,0); return d.getTime(); }
+function hm(t){ const d = new Date(t); return d.getHours() + ":" + String(d.getMinutes()).padStart(2,"0"); }
+function shortDate(t){
+  const d = new Date(t), today = startOfDay(Date.now()), day = startOfDay(t);
+  if (day === today) return hm(t);
+  if (today - day === 864e5) return "昨日";
+  if (today - day < 7 * 864e5) return WD[d.getDay()] + "曜日";
+  return d.getFullYear() + "/" + (d.getMonth()+1) + "/" + d.getDate();
+}
+function longDate(t){ const d = new Date(t); return d.getFullYear()+"年"+(d.getMonth()+1)+"月"+d.getDate()+"日 "+hm(t); }
+function dayTitle(t){
+  const d = new Date(t), today = startOfDay(Date.now()), day = startOfDay(t);
+  const s = (d.getMonth()+1)+"月"+d.getDate()+"日（"+WD[d.getDay()]+"）";
+  if (day === today) return "今日 · " + s;
+  if (today - day === 864e5) return "昨日 · " + s;
+  return (d.getFullYear() !== new Date().getFullYear() ? d.getFullYear()+"年" : "") + s;
+}
+function bucket(t){
+  const today = startOfDay(Date.now()), day = startOfDay(t), diff = (today - day) / 864e5;
+  if (diff < 1) return "今日";
+  if (diff < 2) return "昨日";
+  if (diff < 7) return "過去7日間";
+  if (diff < 30) return "過去30日間";
+  const d = new Date(t);
+  return d.getFullYear() === new Date().getFullYear() ? (d.getMonth()+1) + "月" : d.getFullYear() + "年";
+}
+function dayKey(t){ const d = new Date(t); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); }
+
+// ---------- persistence ops ----------
+async function saveNote(n){ derive(n); await idb.put("notes", n); }
+async function createNote(folderId, html){
+  const now = Date.now();
+  const n = { id: uid(), folderId: folderId || SYS.notes, html: html || "", createdAt: now, updatedAt: now, pinned: false, deletedAt: null };
+  derive(n); S.notes.push(n); await idb.put("notes", n); return n;
+}
+async function trashNote(n){ n.deletedAt = Date.now(); await idb.put("notes", n); toast("「最近削除した項目」に移動しました"); }
+async function restoreNote(n){ n.deletedAt = null; if (!S.folders.some(f => f.id === n.folderId)) n.folderId = SYS.notes; await idb.put("notes", n); toast("復元しました"); }
+async function purgeNote(n){ S.notes = S.notes.filter(x => x !== n); await idb.del("notes", n.id); }
+async function saveMeta(){ await idb.put("meta", {id:"tagColors", value:S.tagColors}); }
+
+// ---------- toast / sheets / dialogs ----------
+let toastT;
+function toast(msg){ const t = $("#toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("show"), 2000); }
+function sheet(message, actions){
+  return new Promise(resolve => {
+    const close = v => { ov.remove(); resolve(v); };
+    const grp = h("div", {class:"grp"}, message ? h("div", {class:"msg"}, message) : null,
+      actions.map(a => h("button", {class: a.danger ? "danger" : "", onclick: () => close(a.value)}, a.label)));
+    const ov = h("div", {class:"overlay", onclick: e => { if (e.target === ov) close(null); }},
+      h("div", {class:"sheet"}, grp, h("div", {class:"grp"}, h("button", {class:"cancel", onclick: () => close(null)}, "キャンセル"))));
+    document.body.append(ov);
+  });
+}
+function ask(title, {message, value = "", placeholder = "", ok = "保存"} = {}){
+  return new Promise(resolve => {
+    const inp = h("input", {type:"text", value, placeholder, id:"dlg-input", enterkeyhint:"done"});
+    const close = v => { ov.remove(); resolve(v); };
+    inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); close(inp.value.trim() || null); } });
+    const ov = h("div", {class:"overlay center"},
+      h("div", {class:"dialog"}, h("h3", null, title), message ? h("p", null, message) : null, inp,
+        h("div", {class:"btns"}, h("button", {onclick: () => close(null)}, "キャンセル"), h("button", {onclick: () => close(inp.value.trim() || null)}, ok))));
+    document.body.append(ov); inp.focus(); inp.select();
+  });
+}
+function confirmBox(title, message, okLabel){
+  return new Promise(resolve => {
+    const close = v => { ov.remove(); resolve(v); };
+    const ov = h("div", {class:"overlay center"},
+      h("div", {class:"dialog"}, h("h3", null, title), h("p", null, message),
+        h("div", {class:"btns"}, h("button", {onclick: () => close(false)}, "キャンセル"), h("button", {style:"color:var(--danger)", onclick: () => close(true)}, okLabel))));
+    document.body.append(ov);
+  });
+}
+
+// ---------- navigation stack ----------
+const stack = [];
+function push(make, animate = true){
+  const scr = make();
+  const prev = stack[stack.length - 1];
+  stack.push(scr);
+  $("#app").append(scr.el);
+  if (animate && prev){
+    scr.el.classList.add("enter");
+    scr.el.getBoundingClientRect();
+    requestAnimationFrame(() => { scr.el.classList.remove("enter"); prev.el.classList.add("under"); });
+  } else if (prev) prev.el.classList.add("under");
+  scr.onShow && scr.onShow();
+  return scr;
+}
+function pop(){
+  if (stack.length < 2) return;
+  const cur = stack.pop(); const prev = stack[stack.length - 1];
+  cur.onLeave && cur.onLeave();
+  cur.el.classList.remove("dragging"); prev.el.classList.remove("dragging");
+  cur.el.style.transform = ""; prev.el.style.transform = ""; prev.el.style.filter = "";
+  cur.el.classList.add("enter"); prev.el.classList.remove("under");
+  setTimeout(() => cur.el.remove(), 400);
+  prev.refresh && prev.refresh();
+}
+
+// edge-swipe back
+(function(){
+  let sx = 0, sy = 0, on = false, cur, prev;
+  document.addEventListener("touchstart", e => {
+    const t = e.touches[0];
+    if (stack.length < 2 || t.clientX > 24) return;
+    on = true; sx = t.clientX; sy = t.clientY; cur = stack[stack.length-1].el; prev = stack[stack.length-2].el;
+    cur.classList.add("dragging"); prev.classList.add("dragging");
+  }, {passive:true});
+  document.addEventListener("touchmove", e => {
+    if (!on) return;
+    const dx = Math.max(0, e.touches[0].clientX - sx);
+    cur.style.transform = "translateX(" + dx + "px)";
+    prev.style.transform = "translateX(" + (-28 + dx / innerWidth * 28) + "%)";
+  }, {passive:true});
+  document.addEventListener("touchend", e => {
+    if (!on) return; on = false;
+    const dx = e.changedTouches[0].clientX - sx;
+    cur.classList.remove("dragging"); prev.classList.remove("dragging");
+    if (dx > innerWidth * 0.3) pop();
+    else { cur.style.transform = ""; prev.style.transform = ""; }
+  });
+})();
+
+// ---------- shared screen chrome ----------
+function screenShell({paper = false, backLabel, title, right = []}){
+  const el = h("section", {class: "screen" + (paper ? " paper" : "")});
+  const nav = h("header", {class:"nav"},
+    h("div", {class:"l"}, backLabel ? h("button", {class:"navbtn", onclick: pop, "aria-label":"戻る"}, h("span", {html:I.back}), backLabel) : null),
+    h("div", {class:"t"}, title || ""),
+    h("div", {class:"r"}, right));
+  el.append(nav);
+  el.addEventListener("scroll", () => nav.classList.toggle("scrolled", el.scrollTop > 36), {passive:true});
+  return {el, nav};
+}
+function setNavTitle(nav, text){ nav.querySelector(".t").textContent = text; }
+function searchBox(placeholder, oninput, id){
+  const inp = h("input", {type:"search", placeholder, id, autocomplete:"off", enterkeyhint:"search"});
+  inp.addEventListener("input", () => oninput(inp.value));
+  return h("label", {class:"search"}, h("span", {html:I.search}), inp);
+}
+function chip(tag, opts = {}){
+  const c = h(opts.button === false ? "span" : "button", {class: "chip" + (opts.sm ? " sm" : ""), "--tc": tagColor(tag), type: opts.button === false ? null : "button",
+    onclick: opts.button === false ? null : (e => { e.stopPropagation(); (opts.onclick || (() => openTag(tag)))(); })},
+    h("span", {class:"dot"}), "#" + tag, opts.count != null ? h("span", {class:"n"}, String(opts.count)) : null);
+  return c;
+}
+
+// ---------- screen: folders ----------
+function FoldersScreen(){
+  let editing = false, q = "";
+  const editBtn = h("button", {class:"navbtn", onclick: () => { editing = !editing; editBtn.textContent = editing ? "完了" : "編集"; editBtn.classList.toggle("bold", editing); render(); }}, "編集");
+  const {el, nav} = screenShell({title:"フォルダ", right:[editBtn]});
+  const body = h("div");
+  el.append(h("h1", {class:"big"}, "フォルダ"), searchBox("検索", v => { q = v; render(); }, "q-folders"), body,
+    h("footer", {class:"tbar"},
+      h("button", {"aria-label":"新規フォルダ", html:I.folderPlus, onclick: newFolder}),
+      h("button", {"aria-label":"新規メモ", html:I.compose, onclick: () => openNewNote(SYS.notes)})));
+
+  async function newFolder(){
+    const name = await ask("新規フォルダ", {message:"このフォルダの名前を入力してください。", placeholder:"名前"});
+    if (!name) return;
+    const f = {id: uid(), name, createdAt: Date.now()}; S.folders.push(f); await idb.put("folders", f); render();
+  }
+  async function folderMenu(f){
+    const a = await sheet(f.name, [{label:"名前を変更", value:"rename"}, {label:"フォルダを削除", value:"delete", danger:true}]);
+    if (a === "rename"){
+      const name = await ask("フォルダ名を変更", {value:f.name}); if (!name) return;
+      f.name = name; await idb.put("folders", f); render();
+    } else if (a === "delete"){
+      const inside = liveNotes().filter(n => n.folderId === f.id);
+      if (!await confirmBox("フォルダを削除しますか？", "フォルダ内の" + inside.length + "件のメモは「最近削除した項目」に移動します。", "削除")) return;
+      for (const n of inside){ n.deletedAt = Date.now(); n.folderId = SYS.notes; await idb.put("notes", n); }
+      S.folders = S.folders.filter(x => x !== f); await idb.del("folders", f.id); render();
+    }
+  }
+
+  function render(){
+    body.replaceChildren();
+    if (q.trim()) { body.append(searchResults(q)); return; }
+    const live = liveNotes();
+    const cnt = id => live.filter(n => n.folderId === id).length;
+
+    body.append(h("div", {class:"group"},
+      h("button", {class:"row today", onclick: openToday},
+        h("span", {class:"ic", html:I.cal}), h("span", {class:"lb"}, "今日のメモ"),
+        h("span", {class:"ct"}, (new Date().getMonth()+1) + "/" + new Date().getDate()), h("span", {class:"chev", html:I.chev}))));
+
+    body.append(h("div", {class:"sechead"}, "メモ"));
+    const g = h("div", {class:"group"});
+    g.append(folderRow("all", "すべてのメモ", live.length, I.allnotes));
+    const sysOrder = [SYS.notes, SYS.daily];
+    for (const id of sysOrder) g.append(folderRow(id, folderName(id), cnt(id), I.folder));
+    for (const f of S.folders.filter(f => !f.system).sort((a,b) => a.createdAt - b.createdAt)){
+      const r = folderRow(f.id, f.name, cnt(f.id), I.folder);
+      if (editing){ r.onclick = null; r.addEventListener("click", e => { e.preventDefault(); e.stopImmediatePropagation(); folderMenu(f); }, true); r.querySelector(".ct").replaceChildren(h("span", {html:I.more, style:"color:var(--accent)"})); }
+      g.append(r);
+    }
+    const trashed = S.notes.filter(n => n.deletedAt).length;
+    if (trashed) g.append(folderRow("trash", "最近削除した項目", trashed, I.trash));
+    body.append(g);
+
+    const tags = allTags();
+    body.append(h("div", {class:"sechead"}, "タグ"));
+    if (tags.length){
+      body.append(h("div", {class:"tagcloud"}, tags.map(t => chip(t.tag, {count:t.lines}))));
+    } else {
+      body.append(h("p", {class:"note"}, "メモの行に #料理 のように書くと、ここにジャンルが自動で並びます。"));
+    }
+
+    body.append(h("div", {class:"sechead small"}, "バックアップ"));
+    body.append(h("div", {class:"group"},
+      h("button", {class:"row", onclick: exportData}, h("span", {class:"ic", html:I.backup}), h("span", {class:"lb"}, "書き出す"), h("span", {class:"chev", html:I.chev})),
+      h("button", {class:"row", onclick: () => $("#importpick").click()}, h("span", {class:"ic", html:I.restore}), h("span", {class:"lb"}, "読み込む"), h("span", {class:"chev", html:I.chev}))));
+    body.append(h("p", {class:"note"}, "メモはこのiPhoneの中だけに保存されます。機種変更に備えて、ときどき書き出しておくと安心です。"));
+  }
+  function folderRow(id, name, count, icon){
+    return h("button", {class:"row", onclick: () => push(() => ListScreen(id, "フォルダ"))},
+      h("span", {class:"ic", html:icon}), h("span", {class:"lb"}, name), h("span", {class:"ct"}, String(count)), h("span", {class:"chev", html:I.chev}));
+  }
+  render();
+  return {el, refresh: render};
+}
+
+function searchResults(q){
+  const s = q.trim().toLowerCase();
+  const wrap = h("div");
+  const tagHits = allTags().filter(t => t.tag.toLowerCase().includes(s.replace(/^[#＃]/, "")));
+  if (tagHits.length){
+    wrap.append(h("div", {class:"sechead small"}, "タグ"), h("div", {class:"tagcloud"}, tagHits.map(t => chip(t.tag, {count:t.lines}))));
+  }
+  const hits = liveNotes().filter(n => {
+    const box = document.createElement("div"); box.innerHTML = n.html; return (box.textContent || "").toLowerCase().includes(s);
+  }).sort((a, b) => b.updatedAt - a.updatedAt);
+  wrap.append(h("div", {class:"sechead small"}, "メモ " + hits.length + "件"));
+  if (hits.length){ const g = h("div", {class:"group"}); hits.forEach(n => g.append(noteRow(n, {showFolder:true}))); wrap.append(g); }
+  else wrap.append(h("div", {class:"empty"}, "「" + q.trim() + "」を含むメモはありません"));
+  return wrap;
+}
+
+// ---------- note row with swipe actions ----------
+let openSwipe = null;
+function noteRow(n, {showFolder = false, trash = false, onChange} = {}){
+  const acts = trash
+    ? [ {cls:"a-restore", icon:I.restoreL, label:"復元", fn: async () => { await restoreNote(n); onChange && onChange(); }},
+        {cls:"a-del", icon:I.trashL, label:"削除", fn: async () => { if (await confirmBox("完全に削除しますか？", "この操作は取り消せません。", "削除")){ await purgeNote(n); onChange && onChange(); } }} ]
+    : [ {cls:"a-pin", icon:I.pinL, label: n.pinned ? "固定解除" : "固定", fn: async () => { n.pinned = !n.pinned; await idb.put("notes", n); onChange && onChange(); }},
+        {cls:"a-move", icon:I.moveL, label:"移動", fn: async () => { if (await moveNote(n)) onChange && onChange(); }},
+        {cls:"a-del", icon:I.trashL, label:"削除", fn: async () => { await trashNote(n); onChange && onChange(); }} ];
+  const W = acts.length * 72;
+  const inner = h("button", {class:"nrow"},
+    h("div", {class:"tt"}, n.pinned && !trash ? h("span", {class:"pinic", html:I.pin}) : null, h("span", null, n.title)),
+    h("div", {class:"sub"}, h("span", {class:"d"}, shortDate(n.updatedAt)), h("span", {class:"p"}, n.preview)),
+    showFolder || trash ? h("div", {class:"fold"}, h("span", {html:I.folder, style:"transform:scale(.6);margin:-4px"}), trash ? "残り" + Math.max(0, 30 - Math.floor((Date.now() - n.deletedAt) / 864e5)) + "日" : folderName(n.folderId)) : null,
+    n.tags && n.tags.length ? h("div", {class:"dots"}, n.tags.slice(0, 6).map(t => chip(t, {sm:true, button:false}))) : null);
+  const wrap = h("div", {class:"swipe"},
+    h("div", {class:"acts"}, acts.map(a => h("button", {class:a.cls, onclick: e => { e.stopPropagation(); close(); a.fn(); }}, h("span", {html:a.icon}), a.label))),
+    inner);
+  let x0 = 0, y0 = 0, dx = 0, mode = null, isOpen = false;
+  function close(){ inner.style.transform = ""; isOpen = false; if (openSwipe === close) openSwipe = null; }
+  inner.addEventListener("touchstart", e => {
+    if (openSwipe && openSwipe !== close) openSwipe();
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; mode = null; dx = 0;
+  }, {passive:true});
+  inner.addEventListener("touchmove", e => {
+    const mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+    if (!mode) mode = Math.abs(mx) > Math.abs(my) + 4 && x0 > 30 ? "x" : (Math.abs(my) > 6 ? "y" : null);
+    if (mode !== "x") return;
+    dx = Math.min(0, Math.max(-W - 30, (isOpen ? -W : 0) + mx));
+    inner.classList.add("drag"); inner.style.transform = "translateX(" + dx + "px)";
+  }, {passive:true});
+  inner.addEventListener("touchend", () => {
+    inner.classList.remove("drag");
+    if (mode !== "x") return;
+    if (dx < -W / 2){ inner.style.transform = "translateX(" + (-W) + "px)"; isOpen = true; openSwipe = close; }
+    else close();
+  });
+  inner.addEventListener("click", async () => {
+    if (mode === "x" || isOpen){ if (isOpen) close(); return; }
+    if (trash){
+      const a = await sheet("「最近削除した項目」のメモは、復元するまで編集できません。", [{label:"復元", value:"r"}, {label:"完全に削除", value:"d", danger:true}]);
+      if (a === "r"){ await restoreNote(n); onChange && onChange(); }
+      if (a === "d" && await confirmBox("完全に削除しますか？", "この操作は取り消せません。", "削除")){ await purgeNote(n); onChange && onChange(); }
+      return;
+    }
+    push(() => EditorScreen(n.id));
+  });
+  return wrap;
+}
+async function moveNote(n){
+  const opts = [{id:SYS.notes}, {id:SYS.daily}, ...S.folders.filter(f => !f.system)].filter(f => f.id !== n.folderId)
+    .map(f => ({label: folderName(f.id), value: f.id}));
+  const to = await sheet("移動先のフォルダを選択", opts);
+  if (!to) return false;
+  n.folderId = to; await idb.put("notes", n); toast("「" + folderName(to) + "」に移動しました"); return true;
+}
+
+// ---------- screen: note list ----------
+function ListScreen(folderId, backLabel){
+  let q = "";
+  const isTrash = folderId === "trash";
+  const {el, nav} = screenShell({backLabel, title: folderName(folderId)});
+  const body = h("div");
+  const count = h("span", {class:"mid"});
+  el.append(h("h1", {class:"big"}, folderName(folderId)), searchBox("検索", v => { q = v; render(); }, "q-list"), body,
+    h("footer", {class:"tbar"}, h("span", {style:"width:36px"}), count,
+      isTrash ? h("span", {style:"width:36px"}) : h("button", {"aria-label":"新規メモ", html:I.compose, onclick: () => openNewNote(folderId === "all" ? SYS.notes : folderId)})));
+  function notes(){
+    let ns = isTrash ? S.notes.filter(n => n.deletedAt) : liveNotes().filter(n => folderId === "all" || n.folderId === folderId);
+    if (q.trim()){ const s = q.trim().toLowerCase(); ns = ns.filter(n => { const b = document.createElement("div"); b.innerHTML = n.html; return b.textContent.toLowerCase().includes(s); }); }
+    return ns.sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+  function render(){
+    body.replaceChildren();
+    const ns = notes();
+    count.textContent = ns.length + "件のメモ";
+    if (!ns.length){
+      body.append(h("div", {class:"empty"}, q ? "該当するメモはありません" : isTrash ? "最近削除した項目はありません" : h("span", null, h("b", null, "メモなし"), "右下のボタンで新規メモを作成")));
+      return;
+    }
+    if (isTrash) body.append(h("p", {class:"note", style:"margin-bottom:10px"}, "メモは削除されてから30日後に完全に削除されます。左にスワイプで復元できます。"));
+    const groups = [];
+    if (!isTrash){ const pinned = ns.filter(n => n.pinned); if (pinned.length) groups.push(["固定済み", pinned]); }
+    for (const n of ns.filter(n => isTrash || !n.pinned)){
+      const b = bucket(n.updatedAt); const g = groups.find(x => x[0] === b); g ? g[1].push(n) : groups.push([b, [n]]);
+    }
+    for (const [label, list] of groups){
+      body.append(h("div", {class:"sechead"}, label));
+      const g = h("div", {class:"group"});
+      list.forEach(n => g.append(noteRow(n, {showFolder: folderId === "all", trash: isTrash, onChange: render})));
+      body.append(g);
+    }
+  }
+  render();
+  return {el, refresh: render, label: folderName(folderId)};
+}
+
+// ---------- screen: tag page ----------
+function TagScreen(tag, backLabel){
+  let mode = "lines";
+  const colorBtn = h("button", {class:"navbtn", "aria-label":"色を変更", html:I.more, onclick: pickColor});
+  const {el, nav} = screenShell({backLabel, title:"#" + tag, right:[colorBtn]});
+  el.style.setProperty("--tc", tagColor(tag));
+  const title = h("h1", {class:"big tagtitle"}, "#" + tag);
+  const sub = h("p", {class:"note", style:"margin:-6px 16px 12px"});
+  const segL = h("button", {type:"button", onclick: () => { mode = "lines"; render(); }}, "行ごと");
+  const segN = h("button", {type:"button", onclick: () => { mode = "notes"; render(); }}, "メモごと");
+  const body = h("div");
+  el.append(title, sub, h("div", {class:"seg"}, segL, segN), body,
+    h("footer", {class:"tbar"}, h("span", {style:"width:36px"}), h("span", {class:"mid"}, "新しい順"),
+      h("button", {"aria-label":"#" + tag + " で書く", html:I.compose, onclick: () => openToday({appendTag: tag})})));
+
+  async function pickColor(){
+    const cur = tagIndex(tag);
+    const ov = h("div", {class:"overlay center", onclick: e => { if (e.target === ov) ov.remove(); }},
+      h("div", {class:"dialog"}, h("h3", null, "#" + tag + " の色"), h("p", null, "このジャンルの色を選んでください"),
+        h("div", {class:"swatches"}, Array.from({length:PALETTE}, (_, i) => h("button", {"--tc":"var(--h" + i + ")", "aria-pressed": i === cur ? "true" : "false", "aria-label":"色" + (i+1),
+          onclick: async () => { S.tagColors[tag] = i; await saveMeta(); ov.remove(); el.style.setProperty("--tc", tagColor(tag)); render(); }}))),
+        h("div", {class:"btns"}, h("button", {onclick: () => ov.remove()}, "閉じる"))));
+    document.body.append(ov);
+  }
+  function render(){
+    segL.setAttribute("aria-pressed", mode === "lines"); segN.setAttribute("aria-pressed", mode === "notes");
+    body.replaceChildren();
+    const lines = [];
+    for (const n of liveNotes()) for (const l of n.lines || []) if (l.tags.includes(tag)) lines.push({...l, note:n});
+    lines.sort((a, b) => b.t - a.t);
+    const notes = [...new Set(lines.map(l => l.note))].sort((a, b) => b.updatedAt - a.updatedAt);
+    sub.textContent = lines.length + "行 · " + notes.length + "件のメモ";
+    if (!lines.length){
+      body.append(h("div", {class:"empty"}, h("b", null, "まだありません"), "右下のボタンで、今日のメモに #" + tag + " 付きの行を追加できます。"));
+      return;
+    }
+    if (mode === "lines"){
+      let cur = null, g = null;
+      for (const l of lines){
+        const k = dayKey(l.t);
+        if (k !== cur){ cur = k; body.append(h("div", {class:"daylabel"}, dayTitle(l.t))); g = h("div", {class:"group"}); body.append(g); }
+        const others = l.tags.filter(t => t !== tag);
+        g.append(h("button", {class:"lrow", "--tc": tagColor(tag), onclick: () => push(() => EditorScreen(l.note.id, {focusT: l.t, focusI: l.i}))},
+          h("div", {class:"tx", style: l.done ? "text-decoration:line-through;color:var(--sec)" : null}, stripTags(l.text) || l.text),
+          h("div", {class:"mt"}, h("span", {class:"tm"}, hm(l.t)), "·", h("span", null, l.note.title), others.map(t => chip(t, {sm:true, button:false})))));
+      }
+    } else {
+      const g = h("div", {class:"group"}); notes.forEach(n => g.append(noteRow(n, {showFolder:true, onChange: render}))); body.append(g);
+    }
+  }
+  render();
+  return {el, refresh: render, label: "#" + tag};
+}
+function openTag(tag){
+  const top = stack[stack.length - 1];
+  const label = top && top.label ? top.label : "戻る";
+  push(() => TagScreen(tag, label));
+}
+
+// ---------- screen: editor ----------
+function EditorScreen(noteId, opts = {}){
+  const note = noteById(noteId);
+  const doneBtn = h("button", {class:"navbtn bold", style:"display:none", onclick: () => ed.blur()}, "完了");
+  const shareBtn = h("button", {class:"navbtn", "aria-label":"共有", html:I.share, onclick: shareNote});
+  const moreBtn = h("button", {class:"navbtn", "aria-label":"その他", html:I.more, onclick: moreMenu});
+  const top = stack[stack.length - 1];
+  const back = (top && top.label) || folderName(note.folderId);
+  const {el, nav} = screenShell({paper:true, backLabel: back, right:[shareBtn, moreBtn, doneBtn]});
+  const when = h("div", {class:"when"}, longDate(note.updatedAt));
+  const ed = h("div", {class:"editor", contenteditable:"true", spellcheck:"false", autocapitalize:"off", "aria-label":"メモ本文", id:"ed-" + note.id});
+  ed.innerHTML = note.html;
+  try { document.execCommand("defaultParagraphSeparator", false, "div"); } catch(e){}
+
+  // keyboard toolbar + panels
+  const kAa = h("button", {"aria-label":"書式", onmousedown: pd}, "Aa");
+  const kCk = h("button", {"aria-label":"チェックリスト", html:I.check, onmousedown: pd});
+  const kTag = h("button", {"aria-label":"タグ", html:I.hash, onmousedown: pd});
+  const kImg = h("button", {"aria-label":"写真", html:I.camera, onmousedown: pd});
+  const kList = h("button", {"aria-label":"箇条書き", html:I.list, onmousedown: pd});
+  const kbar = h("div", {class:"ktbar"}, kAa, kCk, kList, kTag, kImg);
+  const fmt = h("div", {class:"panel"});
+  const tagp = h("div", {class:"panel"});
+  el.append(when, ed, kbar, fmt, tagp);
+  function pd(e){ e.preventDefault(); }
+
+  // --- selection helpers
+  let savedRange = null;
+  function keepRange(){ const s = getSelection(); if (s.rangeCount && ed.contains(s.anchorNode)) savedRange = s.getRangeAt(0).cloneRange(); }
+  function restoreRange(){ if (!savedRange) return; ed.focus(); const s = getSelection(); s.removeAllRanges(); s.addRange(savedRange); }
+  function caretBlock(){
+    const s = getSelection(); if (!s.rangeCount) return null;
+    let n = s.anchorNode; if (!n || !ed.contains(n)) return null;
+    while (n && n.parentNode !== ed && !(n.nodeName === "LI" && n.parentNode.parentNode === ed)) n = n.parentNode;
+    if (n && n.nodeType === 3){ const d = document.createElement("div"); n.replaceWith(d); d.append(n); placeCaret(n, s.anchorOffset); return d; }
+    return n;
+  }
+  function placeCaret(node, off){ const r = document.createRange(); r.setStart(node, Math.min(off, node.length ?? node.childNodes.length)); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+  function caretToEnd(node){ const r = document.createRange(); r.selectNodeContents(node); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+
+  // --- tag wrapping (visual chips while typing)
+  function wrapTags(block, allowEnd){
+    if (!block || block.nodeType !== 1) return;
+    const s = getSelection(); const an = s.anchorNode, ao = s.anchorOffset;
+    const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT, {acceptNode: n => n.parentNode.closest(".tag") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT});
+    const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+    for (const tn of nodes){
+      let node = tn;
+      const re = new RegExp(TAG_RE.source, "g");
+      let m;
+      while ((m = re.exec(node.data))){
+        const end = m.index + m[0].length;
+        const after = node.data[end];
+        if (after === undefined && !allowEnd) break;
+        if (after !== undefined && !/[\s　 .,、。!！?？()（）「」『』\[\]【】]/.test(after)) continue;
+        const tagNode = node.splitText(m.index); const rest = tagNode.splitText(m[0].length);
+        const span = h("span", {class:"tag", "--tc": tagColor(m[1])}); tagNode.replaceWith(span); span.append(tagNode);
+        if (an === node && ao >= end) placeCaret(rest, ao - end);
+        else if (an === node && ao > m.index) placeCaret(tagNode, ao - m.index);
+        node = rest; re.lastIndex = 0;
+      }
+    }
+  }
+  function unwrapBadTags(){
+    for (const sp of ed.querySelectorAll(".tag")){
+      const t = sp.textContent;
+      if (!/^[#＃][^\s#＃]+$/.test(t)) sp.replaceWith(document.createTextNode(t));
+      else sp.style.setProperty("--tc", tagColor(t.slice(1)));
+    }
+  }
+  function decorate(){
+    for (const b of blocksOf(ed)){
+      if (b.nodeType !== 1) continue;
+      const tags = tagsIn(b.textContent || "");
+      if (tags.length){ b.classList.add("tagged"); b.style.setProperty("--tc", tagColor(tags[0])); }
+      else if (b.classList.contains("tagged")){ b.classList.remove("tagged"); b.style.removeProperty("--tc"); if (!b.getAttribute("class")) b.removeAttribute("class"); if (!b.getAttribute("style")) b.removeAttribute("style"); }
+    }
+  }
+
+  // --- save
+  let saveT = null, dirty = false;
+  function scheduleSave(){ dirty = true; clearTimeout(saveT); saveT = setTimeout(saveNow, 500); }
+  async function saveNow(){
+    clearTimeout(saveT); if (!dirty) return; dirty = false;
+    decorate();
+    note.html = ed.innerHTML; note.updatedAt = Date.now();
+    await saveNote(note);
+    when.textContent = longDate(note.updatedAt);
+    setNavTitle(nav, note.title);
+  }
+
+  // --- input handling
+  ed.addEventListener("beforeinput", e => {
+    if (e.inputType === "insertParagraph"){
+      const b = caretBlock();
+      if (b && b.classList && b.classList.contains("ck") && !b.textContent.trim()){
+        e.preventDefault(); b.classList.remove("ck"); b.removeAttribute("data-done"); scheduleSave();
+      } else if (b) wrapTags(b, true);
+    }
+  });
+  ed.addEventListener("input", e => {
+    const b = caretBlock();
+    if (b && b.nodeType === 1){
+      if (e.inputType === "insertParagraph"){
+        b.dataset.t = Date.now();
+        if (b.classList.contains("ck")) b.dataset.done = "0";
+        b.classList.remove("tagged"); b.style.removeProperty("--tc");
+        b.querySelectorAll(".tag").forEach(sp => { if (!sp.textContent) sp.remove(); });
+      } else if (!b.dataset.t) b.dataset.t = Date.now();
+      if (e.inputType === "insertText" && e.data && /[\s　.,、。!！?？]/.test(e.data.slice(-1)) && !e.isComposing) wrapTags(b, false);
+    }
+    scheduleSave();
+  });
+  ed.addEventListener("compositionend", () => { const b = caretBlock(); if (b) wrapTags(b, false); scheduleSave(); });
+  ed.addEventListener("click", e => {
+    const ck = e.target.closest && e.target.closest(".ck");
+    if (ck){
+      const left = ck.getBoundingClientRect().left + (ck.classList.contains("tagged") ? 10 : 0);
+      if (e.clientX - left < 30){ ck.dataset.done = ck.dataset.done === "1" ? "0" : "1"; scheduleSave(); e.preventDefault(); }
+    }
+    const tg = e.target.closest && e.target.closest(".tag");
+    if (tg && document.activeElement !== ed) openTag(tg.textContent.slice(1));
+  });
+  ed.addEventListener("focus", () => { kbar.classList.add("on"); doneBtn.style.display = ""; shareBtn.style.display = "none"; moreBtn.style.display = "none"; placeBars(); });
+  ed.addEventListener("blur", () => {
+    setTimeout(() => {
+      if (document.activeElement === ed || el.contains(document.activeElement)) return;
+      kbar.classList.remove("on"); fmt.classList.remove("on"); tagp.classList.remove("on"); kAa.classList.remove("on"); kTag.classList.remove("on");
+      doneBtn.style.display = "none"; shareBtn.style.display = ""; moreBtn.style.display = "";
+      blocksOf(ed).forEach(b => wrapTags(b, true)); unwrapBadTags(); dirty = true; saveNow();
+    }, 120);
+  });
+  document.addEventListener("selectionchange", keepRange);
+
+  // keep toolbars above the on-screen keyboard
+  function placeBars(){
+    const vv = window.visualViewport; let off = 0;
+    if (vv) off = Math.max(0, innerHeight - vv.height - vv.offsetTop);
+    kbar.style.bottom = off + "px"; kbar.classList.toggle("kb", off > 0);
+    const kb = kbar.getBoundingClientRect().height;
+    fmt.style.bottom = tagp.style.bottom = (off + kb + 8) + "px";
+  }
+  window.visualViewport && visualViewport.addEventListener("resize", placeBars);
+  window.visualViewport && visualViewport.addEventListener("scroll", placeBars);
+
+  // --- format panel
+  const cmd = (c, v) => { restoreRange(); document.execCommand(c, false, v); scheduleSave(); keepRange(); };
+  function block(tagName){ restoreRange(); document.execCommand("formatBlock", false, tagName); const b = caretBlock(); if (b && b.nodeType === 1) b.dataset.t = b.dataset.t || Date.now(); scheduleSave(); }
+  fmt.append(
+    h("div", {class:"ttl"}, h("span", null, "書式"), h("button", {class:"navbtn", onmousedown: pd, onclick: () => { fmt.classList.remove("on"); kAa.classList.remove("on"); }}, "閉じる")),
+    h("div", {class:"styles"},
+      h("button", {class:"s-title", onmousedown: pd, onclick: () => block("h1")}, "タイトル"),
+      h("button", {class:"s-h", onmousedown: pd, onclick: () => block("h2")}, "見出し"),
+      h("button", {class:"s-sh", onmousedown: pd, onclick: () => block("h3")}, "小見出し"),
+      h("button", {onmousedown: pd, onclick: () => block("div")}, "本文"),
+      h("button", {class:"s-mono", onmousedown: pd, onclick: () => block("pre")}, "等幅")),
+    h("div", {class:"rowbtns"},
+      h("button", {onmousedown: pd, onclick: () => cmd("bold"), style:"font-weight:800"}, "B"),
+      h("button", {onmousedown: pd, onclick: () => cmd("italic"), style:"font-style:italic;font-family:Georgia,serif"}, "I"),
+      h("button", {onmousedown: pd, onclick: () => cmd("underline"), style:"text-decoration:underline"}, "U"),
+      h("button", {onmousedown: pd, onclick: () => cmd("strikeThrough"), style:"text-decoration:line-through"}, "S")),
+    h("div", {class:"rowbtns"},
+      h("button", {onmousedown: pd, onclick: () => cmd("insertUnorderedList"), html:I.list, "aria-label":"箇条書き"}),
+      h("button", {onmousedown: pd, onclick: () => { cmd("insertUnorderedList"); const b = caretBlock(); if (b && b.parentNode && b.parentNode.nodeName === "UL") b.parentNode.classList.add("dash"); }, html:I.dlist, "aria-label":"ダッシュリスト"}),
+      h("button", {onmousedown: pd, onclick: () => cmd("insertOrderedList"), html:I.olist, "aria-label":"番号付きリスト"}),
+      h("button", {onmousedown: pd, onclick: () => cmd("removeFormat"), style:"font-size:14px"}, "解除")));
+  kAa.addEventListener("click", () => { const on = !fmt.classList.contains("on"); fmt.classList.toggle("on", on); kAa.classList.toggle("on", on); tagp.classList.remove("on"); kTag.classList.remove("on"); placeBars(); });
+  kList.addEventListener("click", () => cmd("insertUnorderedList"));
+  kCk.addEventListener("click", () => {
+    restoreRange(); const b = caretBlock();
+    if (!b || b.nodeType !== 1 || b.nodeName === "LI"){ toast("リストの外で使ってください"); return; }
+    if (b.classList.contains("ck")){ b.classList.remove("ck"); b.removeAttribute("data-done"); }
+    else { b.classList.add("ck"); b.dataset.done = "0"; b.dataset.t = b.dataset.t || Date.now(); }
+    scheduleSave();
+  });
+
+  // --- tag picker
+  function insertTag(t){
+    restoreRange();
+    const b = caretBlock();
+    const before = b && b.textContent && !/[\s　 ]$/.test(b.textContent) ? " " : "";
+    document.execCommand("insertText", false, before + "#" + t + " ");
+    const nb = caretBlock(); if (nb && nb.nodeType === 1){ nb.dataset.t = nb.dataset.t || Date.now(); wrapTags(nb, false); }
+    tagp.classList.remove("on"); kTag.classList.remove("on");
+    scheduleSave(); toast("#" + t + " に分類しました");
+  }
+  function renderTagPicker(){
+    const newIn = h("input", {type:"text", placeholder:"新しいタグ名", id:"newtag-" + note.id, enterkeyhint:"done"});
+    const add = () => { const v = newIn.value.trim().replace(/^[#＃]/, "").replace(/\s+/g, ""); if (v) insertTag(v); };
+    newIn.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); add(); } });
+    const tags = allTags();
+    tagp.replaceChildren(
+      h("div", {class:"ttl"}, h("span", null, "この行にタグを付ける"), h("button", {class:"navbtn", onmousedown: pd, onclick: () => { tagp.classList.remove("on"); kTag.classList.remove("on"); }}, "閉じる")),
+      tags.length ? h("div", {class:"tagpick"}, tags.map(t => { const c = chip(t.tag, {onclick: () => insertTag(t.tag)}); c.addEventListener("mousedown", pd); return c; }))
+                  : h("p", {class:"note", style:"margin:0"}, "まだタグがありません。下で作れます。"),
+      h("div", {class:"newtag"}, newIn, h("button", {onclick: add}, "追加")));
+  }
+  kTag.addEventListener("click", () => { const on = !tagp.classList.contains("on"); if (on) renderTagPicker(); tagp.classList.toggle("on", on); kTag.classList.toggle("on", on); fmt.classList.remove("on"); kAa.classList.remove("on"); placeBars(); });
+
+  // --- images
+  kImg.addEventListener("click", () => { keepRange(); const p = $("#imgpick"); p.value = ""; p.onchange = async () => {
+    const f = p.files[0]; if (!f) return;
+    try { const url = await shrink(f); restoreRange(); document.execCommand("insertHTML", false, '<div data-t="' + Date.now() + '"><img src="' + url + '" alt=""></div><div data-t="' + Date.now() + '"><br></div>'); scheduleSave(); }
+    catch(e){ toast("画像を読み込めませんでした"); }
+  }; p.click(); });
+
+  // --- share / more
+  function plainText(){ return blocksOf(ed).map(b => b.textContent).join("\n"); }
+  async function shareNote(){
+    await saveNow();
+    if (navigator.share){ try { await navigator.share({title: note.title, text: plainText()}); } catch(e){} return; }
+    try { await navigator.clipboard.writeText(plainText()); toast("コピーしました"); } catch(e){ toast("共有できませんでした"); }
+  }
+  async function moreMenu(){
+    await saveNow();
+    const a = await sheet(null, [
+      {label: note.pinned ? "固定を解除" : "メモを固定", value:"pin"},
+      {label:"移動", value:"move"},
+      {label:"テキストをコピー", value:"copy"},
+      {label:"削除", value:"del", danger:true}]);
+    if (a === "pin"){ note.pinned = !note.pinned; await idb.put("notes", note); toast(note.pinned ? "固定しました" : "固定を解除しました"); }
+    if (a === "move"){ if (await moveNote(note)) nav.querySelector(".l .navbtn").lastChild.textContent = folderName(note.folderId); }
+    if (a === "copy"){ try { await navigator.clipboard.writeText(plainText()); toast("コピーしました"); } catch(e){ toast("コピーできませんでした"); } }
+    if (a === "del"){ await trashNote(note); pop(); }
+  }
+
+  setNavTitle(nav, note.title);
+  return {
+    el, label: "メモ",
+    onShow(){
+      if (opts.focusT || opts.focusI != null){
+        const bs = blocksOf(ed);
+        const target = bs.find(b => b.dataset && +b.dataset.t === opts.focusT) || bs[opts.focusI];
+        if (target && target.nodeType === 1) setTimeout(() => { target.scrollIntoView({block:"center", behavior:"smooth"}); target.classList.add("flash"); setTimeout(() => target.classList.remove("flash"), 1700); }, 380);
+      }
+      if (opts.focusEnd){
+        ed.focus();
+        if (opts.appendTag){
+          const nb = h("div", {"data-t": Date.now()});
+          const sp = h("span", {class:"tag", "--tc": tagColor(opts.appendTag)}, "#" + opts.appendTag);
+          const tx = document.createTextNode(" ");
+          nb.append(sp, tx);
+          const last = ed.lastElementChild;
+          if (last && !last.textContent.trim() && !last.querySelector("img")) last.replaceWith(nb); else ed.append(nb);
+          placeCaret(tx, 1); scheduleSave();
+        } else {
+          const bs = blocksOf(ed); const last = bs[bs.length - 1]; if (last) caretToEnd(last);
+        }
+        setTimeout(() => (ed.lastElementChild || ed).scrollIntoView({block:"center"}), 60);
+      }
+    },
+    onLeave(){
+      document.removeEventListener("selectionchange", keepRange);
+      window.visualViewport && visualViewport.removeEventListener("resize", placeBars);
+      window.visualViewport && visualViewport.removeEventListener("scroll", placeBars);
+      if (document.activeElement === ed) ed.blur();
+      blocksOf(ed).forEach(b => wrapTags(b, true)); unwrapBadTags(); decorate();
+      note.html = ed.innerHTML; derive(note);
+      if (note.empty){ purgeNote(note); return; }
+      if (dirty) { note.updatedAt = Date.now(); dirty = false; }
+      clearTimeout(saveT); saveNote(note);
+    }
+  };
+}
+
+function shrink(file){
+  return new Promise((res, rej) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const max = 1400, k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = rej; img.src = url;
+  });
+}
+
+// ---------- entry points ----------
+async function openNewNote(folderId){
+  const n = await createNote(folderId, '<div data-t="' + Date.now() + '"><br></div>');
+  push(() => EditorScreen(n.id, {focusEnd:true}));
+}
+async function openToday(opts = {}){
+  const key = dayKey(Date.now());
+  let n = liveNotes().find(x => x.folderId === SYS.daily && x.dailyKey === key);
+  if (!n){
+    const d = new Date(), t = Date.now();
+    n = await createNote(SYS.daily, '<div data-t="' + t + '">' + d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日（" + WD[d.getDay()] + '）</div><div data-t="' + t + '"><br></div>');
+    n.dailyKey = key; await idb.put("notes", n);
+  }
+  push(() => EditorScreen(n.id, {focusEnd:true, appendTag: opts.appendTag}));
+}
+
+// ---------- backup ----------
+async function exportData(){
+  const data = JSON.stringify({app:"memo-plus", version:1, exportedAt:new Date().toISOString(), folders:S.folders, notes:S.notes, tagColors:S.tagColors});
+  const name = "memo-plus-" + new Date().toISOString().slice(0,10) + ".json";
+  const file = new File([data], name, {type:"application/json"});
+  if (navigator.canShare && navigator.canShare({files:[file]})){
+    try { await navigator.share({files:[file], title:name}); return; } catch(e){ if (e.name === "AbortError") return; }
+  }
+  const a = h("a", {href: URL.createObjectURL(file), download: name}); document.body.append(a); a.click(); a.remove();
+  toast("書き出しました");
+}
+$("#importpick").addEventListener("change", async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (d.app !== "memo-plus") throw new Error("format");
+    if (!await confirmBox("バックアップを読み込みますか？", (d.notes || []).length + "件のメモを追加します。同じメモは上書きされます。", "読み込む")) return;
+    for (const fo of d.folders || []){ await idb.put("folders", fo); if (!S.folders.some(x => x.id === fo.id)) S.folders.push(fo); }
+    for (const n of d.notes || []){ await idb.put("notes", n); const i = S.notes.findIndex(x => x.id === n.id); i >= 0 ? S.notes[i] = n : S.notes.push(n); }
+    Object.assign(S.tagColors, d.tagColors || {}); await saveMeta();
+    stack[stack.length - 1].refresh && stack[stack.length - 1].refresh();
+    toast("読み込みました");
+  } catch(err){ toast("このファイルは読み込めません"); }
+});
+
+// ---------- boot ----------
+(async function boot(){
+  try { await idb.open(); } catch(e){ toast("保存領域を開けませんでした。メモは保存されません"); }
+  S.folders = await idb.all("folders");
+  S.notes = await idb.all("notes");
+  const meta = await idb.all("meta"); const tc = meta.find(m => m.id === "tagColors"); if (tc) S.tagColors = tc.value || {};
+  for (const [id, name] of [[SYS.notes, "メモ"], [SYS.daily, "毎日メモ"]]){
+    if (!S.folders.some(f => f.id === id)){ const f = {id, name, system:true, createdAt:0}; S.folders.push(f); await idb.put("folders", f); }
+  }
+  // purge notes deleted over 30 days ago
+  for (const n of S.notes.filter(n => n.deletedAt && Date.now() - n.deletedAt > 30 * 864e5)) await purgeNote(n);
+  if (!S.notes.length){
+    const t = Date.now();
+    await createNote(SYS.notes,
+      '<div data-t="' + t + '">メモ+ へようこそ</div>' +
+      '<div data-t="' + t + '">純正メモと同じように書けます。行の中に <span class="tag" style="--tc:' + tagColor("使い方") + '">#使い方</span> のようにタグを書くと、その行がジャンルに自動で集まります。</div>' +
+      '<div data-t="' + t + '">カレー 玉ねぎは飴色まで炒める <span class="tag" style="--tc:' + tagColor("料理") + '">#料理</span></div>' +
+      '<div data-t="' + t + '" class="ck" data-done="0">左の丸をタップするとチェックできます</div>' +
+      '<div data-t="' + t + '">フォルダ画面の「今日のメモ」から、日付ごとに書きなぐれます。</div>');
+  }
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  const home = push(FoldersScreen, false); home.label = "フォルダ";
+})();
+
+if ("serviceWorker" in navigator && location.protocol !== "file:") navigator.serviceWorker.register("sw.js").catch(() => {});
+</script>
+</body>
+</html>
