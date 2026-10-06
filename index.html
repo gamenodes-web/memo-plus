@@ -111,7 +111,6 @@ svg{display:block}
 .lrow .mt{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;color:var(--sec);font-size:13px}
 .lrow .mt .tm{font-variant-numeric:tabular-nums}
 .lrow:active{background:var(--fill)}
-.lrow.priv:not(.shown) .tx{filter:blur(6px);-webkit-user-select:none;user-select:none}
 .lrow .lock{display:inline-flex;align-items:center;gap:3px;color:var(--danger);font-size:12px;font-weight:600}
 .lrow.selecting{padding-left:52px}
 .lrow .cb{position:absolute;left:16px;top:50%;width:24px;height:24px;margin-top:-12px;border-radius:50%;border:1.5px solid var(--ter)}
@@ -346,14 +345,14 @@ function blocksOf(root){
 function tagsIn(text){ const t = []; for (const m of text.matchAll(TAG_RE)) if (!t.includes(m[1])) t.push(m[1]); return t; }
 function stripTags(text){ return text.replace(TAG_RE, "").replace(/[ \t　 ]+/g, " ").trim(); }
 function rtOf(el){ return el && el.nodeType === 1 && el.dataset.rt ? el.dataset.rt.split(" ").filter(Boolean) : []; }
-// text with private parts masked (titles, previews, AI)
+// text with #個人情報 parts removed — this is what gets copied / sent to AI
 function pubText(b){
-  if (b.nodeType === 3) return b.textContent.trim();
+  if (b.nodeType === 3) return tagsIn(b.textContent).includes(PRIV) ? "" : b.textContent.trim();
   const tags = [...tagsIn(b.textContent || ""), ...rtOf(b)];
-  if (tags.includes(PRIV)) return "••••";
+  if (tags.includes(PRIV)) return "";
   const c = b.cloneNode(true);
-  for (const sp of c.querySelectorAll(".rt[data-rt]")) if (rtOf(sp).includes(PRIV)) sp.textContent = "••••";
-  return (c.textContent || "").replace(/\u200b/g, "").trim();
+  for (const sp of c.querySelectorAll(".rt[data-rt]")) if (rtOf(sp).includes(PRIV)) sp.remove();
+  return (c.textContent || "").replace(/\u200b/g, "").replace(/[ \t\u3000\u00a0]{2,}/g, " ").trim();
 }
 function derive(note){
   const box = document.createElement("div"); box.innerHTML = note.html || "";
@@ -366,18 +365,20 @@ function derive(note){
     const text = (b.textContent || "").replace(/\u200b/g, "").trim();
     const t = (el && +el.dataset.t) || fallbackT;
     const pub = pubText(b);
-    if (text) texts.push(pub);
+    if (text) texts.push(text);
     // inline range tags
     if (el) for (const sp of el.querySelectorAll(".rt[data-rt]")){
       const st = sp.textContent.trim(); if (!st) continue;
-      lines.push({t, text: st, tags: rtOf(sp), i, inline: true});
+      const e = {t, text: st, tags: rtOf(sp), i, inline: true};
+      if (e.tags.includes(PRIV)) e.pub = "";
+      lines.push(e);
     }
     const tags = [...new Set([...tagsIn(text), ...rtOf(el)])];
     if (!tags.length || !text) return;
     const g = el && el.dataset.g;
     if (g && groups.has(g)){
-      const e = groups.get(g); e.pub = (e.pub ?? e.text) + "\n" + pub; e.text += "\n" + text;
-      for (const x of tags) if (!e.tags.includes(x)) e.tags.push(x);
+      const e = groups.get(g); e.pub = [e.pub ?? e.text, pub].filter(Boolean).join("\n"); e.text += "\n" + text;
+      for (const x of tags) if (x !== PRIV && !e.tags.includes(x)) e.tags.push(x);
       return;
     }
     const e = {t, text, tags, i, done: !!(el && el.dataset.done === "1")};
@@ -392,7 +393,8 @@ function derive(note){
   note.empty = !texts.length && !hasImg;
   return note;
 }
-function isPriv(l){ return l.tags.includes(PRIV); }
+// nothing left once the private parts are removed → never copied or sent
+function isPriv(l){ return !(l.pub ?? l.text).trim(); }
 
 // ---------- dates ----------
 const WD = ["日","月","火","水","木","金","土"];
@@ -737,7 +739,7 @@ function ListScreen(folderId, backLabel){
 const I_SPARK = '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z" fill="currentColor"/></svg>';
 function TagScreen(tag, backLabel){
   let mode = "lines", selecting = false;
-  const selected = new Set(); const shown = new Set();
+  const selected = new Set();
   const colorBtn = h("button", {class:"navbtn", "aria-label":"色を変更", html:I.more, onclick: pickColor});
   const selBtn = h("button", {class:"navbtn", onclick: () => { selecting = !selecting; selected.clear(); if (selecting) mode = "lines"; render(); }}, "選択");
   const {el, nav} = screenShell({backLabel, title:"#" + tag, right:[selBtn, colorBtn]});
@@ -798,15 +800,14 @@ function TagScreen(tag, backLabel){
         if (k !== cur){ cur = k; body.append(h("div", {class:"daylabel"}, dayTitle(l.t))); g = h("div", {class:"group"}); body.append(g); }
         const others = l.tags.filter(t => t !== tag && t !== PRIV);
         const priv = isPriv(l) || l.pub != null;
-        const row = h("button", {class:"lrow" + (priv ? " priv" : "") + (selecting ? " selecting" : "") + (selected.has(l.key) ? " on" : "") + (shown.has(l.key) ? " shown" : ""), "--tc": tagColor(tag)},
+        const row = h("button", {class:"lrow" + (selecting ? " selecting" : "") + (selected.has(l.key) ? " on" : ""), "--tc": tagColor(tag)},
           selecting ? h("span", {class:"cb"}) : null,
           h("div", {class:"tx", style: l.done ? "text-decoration:line-through;color:var(--sec)" : null}, stripTags(l.text) || l.text),
           h("div", {class:"mt"}, h("span", {class:"tm"}, hm(l.t)), "·", h("span", null, l.note.title),
-            priv ? h("span", {class:"lock"}, isPriv(l) ? "個人情報 · AIに送りません" : "一部に個人情報（AIには伏せて送ります）") : null,
+            priv ? h("span", {class:"lock"}, isPriv(l) ? "個人情報 · コピー・AIから除外" : "個人情報の部分は除外") : null,
             others.map(t => chip(t, {sm:true, button:false}))));
         row.addEventListener("click", () => {
           if (selecting){ selected.has(l.key) ? selected.delete(l.key) : selected.add(l.key); render(); return; }
-          if (priv && !shown.has(l.key)){ shown.add(l.key); row.classList.add("shown"); return; }
           push(() => EditorScreen(l.note.id, {focusT: l.t, focusI: l.i}));
         });
         g.append(row);
@@ -823,12 +824,15 @@ function TagScreen(tag, backLabel){
 async function sendToAI(tag, entries){
   const skip = entries.filter(isPriv);
   const ok = entries.filter(l => !isPriv(l)).sort((a, b) => a.t - b.t);
-  if (!ok.length){ toast("個人情報の行はAIに送れません"); return; }
+  if (!ok.length){ toast("選んだ行はすべて個人情報なので、コピー・送信できません"); return; }
   const md = t => { const d = new Date(t); return (d.getMonth()+1) + "/" + d.getDate(); };
   const body = ok.map(l => "- (" + md(l.t) + ") " + stripTags(l.pub ?? l.text).replace(/\n/g, "\n  ")).join("\n");
   const prompt = "以下は私のメモのうち「#" + tag + "」に分類した" + ok.length + "件です。\n" +
     "重複している内容は1つにまとめ、似た話題ごとに見出しを付けて、見やすく整理してください。情報は削らず、食い違いがあれば指摘してください。\n\n" + body;
-  const msg = (skip.length ? "個人情報タグの付いた" + skip.length + "件は送りません。" : "") + ok.length + "件を整理の指示と一緒に送ります。";
+  const partial = ok.filter(l => l.pub != null).length;
+  const msg = (skip.length ? "#個人情報 の" + skip.length + "件は抜きました。" : "") +
+    (partial ? "一部に個人情報がある" + partial + "件は、その部分だけ抜きました。" : "") +
+    ok.length + "件を整理の指示と一緒に送ります。";
   const a = await sheet(msg, [
     {label:"Claudeで整理する", value:"claude"},
     {label:"ほかのAIアプリに送る", value:"share"},
@@ -1117,7 +1121,7 @@ function EditorScreen(noteId, opts = {}){
     const tags = [PRIV, ...allTags().map(t => t.tag).filter(t => t !== PRIV)];
     const pickChip = t => {
       const c = chip(t, {onclick: () => insertTag(t)}); c.addEventListener("mousedown", pd);
-      if (t === PRIV) c.append(h("span", {class:"n"}, "AIに送らない"));
+      if (t === PRIV) c.append(h("span", {class:"n"}, "コピー・AIから除外"));
       return c;
     };
     const cur = rangeMode ? null : caretRT();
@@ -1258,6 +1262,8 @@ $("#importpick").addEventListener("change", async e => {
   try { await idb.open(); } catch(e){ toast("保存領域を開けませんでした。メモは保存されません"); }
   S.folders = await idb.all("folders");
   S.notes = await idb.all("notes");
+  // re-analyse every note on start so rule changes (e.g. what counts as private) apply to old notes too
+  for (const n of S.notes) derive(n);
   const meta = await idb.all("meta"); const tc = meta.find(m => m.id === "tagColors"); if (tc) S.tagColors = tc.value || {};
   for (const [id, name] of [[SYS.notes, "メモ"], [SYS.daily, "毎日メモ"]]){
     if (!S.folders.some(f => f.id === id)){ const f = {id, name, system:true, createdAt:0}; S.folders.push(f); await idb.put("folders", f); }
