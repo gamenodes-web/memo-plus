@@ -31,23 +31,30 @@
   color-scheme:dark}}
 
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;margin:0;overflow:hidden;background:var(--bg);color:var(--label);font-family:var(--font);font-size:17px;-webkit-text-size-adjust:100%}
+html,body{height:100%;margin:0;overflow:hidden;-webkit-font-smoothing:antialiased;-webkit-user-select:none;user-select:none;background:var(--bg);color:var(--label);font-family:var(--font);font-size:17px;-webkit-text-size-adjust:100%}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
-input,textarea{font:inherit;color:inherit}
+input,textarea{font:inherit;color:inherit;-webkit-user-select:text;user-select:text}
+.navbtn:active,.tbar button:active,.ktbar button:active{opacity:.3}
+.navbtn,.tbar button,.ktbar button{transition:opacity .15s}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 svg{display:block}
 #app{position:fixed;inset:0;overflow:hidden}
 
 /* ---------- screens ---------- */
-.screen{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;background:var(--bg);transition:transform .38s cubic-bezier(.2,.8,.2,1),filter .38s;will-change:transform;padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+.screen{position:absolute;inset:0;overflow:hidden;background:var(--bg);transition:transform .42s cubic-bezier(.32,.72,0,1);box-shadow:-1px 0 10px rgba(0,0,0,.08)}
+.screen > .scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-top:calc(env(safe-area-inset-top,0px) + 50px);padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
+.screen::after{content:"";position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .42s cubic-bezier(.32,.72,0,1);z-index:40}
 .screen.paper{background:var(--paper)}
 .screen.enter{transform:translateX(100%)}
-.screen.under{transform:translateX(-28%);filter:brightness(.92)}
-.screen.dragging{transition:none}
-@media (prefers-reduced-motion:reduce){.screen{transition:none}}
+.screen.under{transform:translateX(-30%)}
+.screen.under::after{opacity:.1}
+.screen.dragging,.screen.dragging::after{transition:none}
+@media (prefers-reduced-motion:reduce){.screen,.screen::after{transition:none}}
 
-.nav{position:sticky;top:0;z-index:20;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px) + 6px) 12px 6px;min-height:calc(env(safe-area-inset-top,0px) + 50px);background:var(--nav);-webkit-backdrop-filter:saturate(180%) blur(18px);backdrop-filter:saturate(180%) blur(18px);border-bottom:.5px solid transparent;transition:border-color .2s}
-.paper .nav{background:var(--navpaper)}
+.nav{position:absolute;top:0;left:0;right:0;z-index:20;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top,0px) + 6px) 12px 6px;min-height:calc(env(safe-area-inset-top,0px) + 50px);background:transparent;border-bottom:.5px solid transparent;transition:background-color .2s,border-color .2s}
+.nav.scrolled{background:var(--nav);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px)}
+.paper .nav{background:var(--paper)}
+.paper .nav.scrolled{background:var(--navpaper)}
 .nav.scrolled{border-bottom-color:var(--sep)}
 .nav .l{display:flex;justify-content:flex-start;min-width:0}
 .nav .r{display:flex;justify-content:flex-end;gap:18px;align-items:center}
@@ -85,8 +92,12 @@ svg{display:block}
 .chip.sm .dot{width:7px;height:7px}
 
 /* note rows with swipe */
-.swipe{position:relative;overflow:hidden;background:var(--danger)}
+.swipe{position:relative;overflow:hidden;background:var(--cell)}
 .swipe .acts{position:absolute;inset:0 0 0 auto;display:flex}
+.swipe .lead{position:absolute;inset:0 auto 0 0;display:flex;align-items:center;padding-left:24px;background:var(--pin);color:#fff;font-size:13px;width:100%;opacity:0}
+.swipe.leading .lead{opacity:1}
+.swipe.leading{background:var(--pin)}
+.swipe.gone{transition:height .28s ease,opacity .2s;opacity:0}
 .swipe .acts button{width:72px;color:#fff;font-size:13px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px}
 .swipe .acts .a-pin{background:var(--pin)}
 .swipe .acts .a-move{background:#5e5ce6}
@@ -101,7 +112,7 @@ svg{display:block}
 .nrow .sub .p{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nrow .dots{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
 .nrow .fold{display:flex;align-items:center;gap:4px;color:var(--sec);font-size:13px;margin-top:3px}
-.nrow:active{background:var(--fill)}
+.nrow:active,.nrow.pressed{background:var(--fill)}
 .swipe.flash .nrow{background:color-mix(in srgb,var(--accent) 20%,var(--cell))}
 
 /* tag line rows */
@@ -140,7 +151,7 @@ svg{display:block}
 
 /* editor */
 .when{text-align:center;color:var(--sec);font-size:13px;margin:4px 0 6px}
-.editor{min-height:60vh;padding:0 20px 40vh;outline:none;line-height:1.5;font-size:17px;word-break:break-word;caret-color:var(--accent)}
+.editor{-webkit-user-select:text;user-select:text;min-height:60vh;padding:0 20px 40vh;outline:none;line-height:1.5;font-size:17px;word-break:break-word;caret-color:var(--accent)}
 .editor > *{margin:0}
 .editor > :first-child{font-size:28px;font-weight:700;line-height:1.25;margin-bottom:6px}
 .editor h1{font-size:28px;font-weight:700;line-height:1.25}
@@ -296,8 +307,8 @@ const idb = {
     });
   },
   all(s){ return this.tx(s, "readonly", os => os.getAll()); },
-  put(s, v){ return this.tx(s, "readwrite", os => os.put(v)); },
-  del(s, id){ return this.tx(s, "readwrite", os => os.delete(id)); },
+  put(s, v){ ver++; return this.tx(s, "readwrite", os => os.put(v)); },
+  del(s, id){ ver++; return this.tx(s, "readwrite", os => os.delete(id)); },
 };
 
 // ---------- state ----------
@@ -391,6 +402,7 @@ function derive(note){
   note.lines = lines;
   note.tags = [...new Set(lines.flatMap(l => l.tags))];
   note.empty = !texts.length && !hasImg;
+  note.plain = (box.textContent || "").toLowerCase();
   return note;
 }
 // nothing left once the private parts are removed → never copied or sent
@@ -428,10 +440,10 @@ function dayKey(t){ const d = new Date(t); return d.getFullYear()+"-"+(d.getMont
 
 // ---------- persistence ops ----------
 async function saveNote(n){ derive(n); await idb.put("notes", n); }
-async function createNote(folderId, html){
+function createNote(folderId, html){
   const now = Date.now();
   const n = { id: uid(), folderId: folderId || SYS.notes, html: html || "", createdAt: now, updatedAt: now, pinned: false, deletedAt: null };
-  derive(n); S.notes.push(n); await idb.put("notes", n); return n;
+  derive(n); S.notes.push(n); idb.put("notes", n); return n;
 }
 async function trashNote(n){ n.deletedAt = Date.now(); await idb.put("notes", n); toast("「最近削除した項目」に移動しました"); }
 async function restoreNote(n){ n.deletedAt = null; if (!S.folders.some(f => f.id === n.folderId)) n.folderId = SYS.notes; await idb.put("notes", n); toast("復元しました"); }
@@ -474,8 +486,10 @@ function confirmBox(title, message, okLabel){
 
 // ---------- navigation stack ----------
 const stack = [];
+let ver = 0;   // bumps on every data change, so screens only re-render when something changed
 function push(make, animate = true){
   const scr = make();
+  scr.seen = ver;
   const prev = stack[stack.length - 1];
   stack.push(scr);
   $("#app").append(scr.el);
@@ -494,8 +508,18 @@ function pop(){
   cur.el.classList.remove("dragging"); prev.el.classList.remove("dragging");
   cur.el.style.transform = ""; prev.el.style.transform = ""; prev.el.style.filter = "";
   cur.el.classList.add("enter"); prev.el.classList.remove("under");
-  setTimeout(() => cur.el.remove(), 400);
-  prev.refresh && prev.refresh();
+  setTimeout(() => cur.el.remove(), 450);
+  if (prev.refresh && prev.seen !== ver){ prev.refresh(); prev.seen = ver; }
+}
+// swap the top screen for a new one (e.g. compose from inside a note)
+function replaceTop(make){
+  const cur = stack.pop(); cur.onLeave && cur.onLeave();
+  const scr = make(); scr.seen = ver; stack.push(scr);
+  $("#app").append(scr.el);
+  scr.el.classList.add("enter"); scr.el.getBoundingClientRect();
+  requestAnimationFrame(() => scr.el.classList.remove("enter"));
+  setTimeout(() => cur.el.remove(), 450);
+  scr.onShow && scr.onShow();
 }
 
 // edge-swipe back
@@ -511,27 +535,29 @@ function pop(){
     if (!on) return;
     const dx = Math.max(0, e.touches[0].clientX - sx);
     cur.style.transform = "translateX(" + dx + "px)";
-    prev.style.transform = "translateX(" + (-28 + dx / innerWidth * 28) + "%)";
+    prev.style.transform = "translateX(" + (-30 + dx / innerWidth * 30) + "%)";
   }, {passive:true});
   document.addEventListener("touchend", e => {
     if (!on) return; on = false;
     const dx = e.changedTouches[0].clientX - sx;
     cur.classList.remove("dragging"); prev.classList.remove("dragging");
-    if (dx > innerWidth * 0.3) pop();
+    if (dx > innerWidth * 0.33) pop();
     else { cur.style.transform = ""; prev.style.transform = ""; }
   });
 })();
 
 // ---------- shared screen chrome ----------
 function screenShell({paper = false, backLabel, title, right = []}){
-  const el = h("section", {class: "screen" + (paper ? " paper" : "")});
+  const root = h("section", {class: "screen" + (paper ? " paper" : "")});
+  const el = h("div", {class:"scroll"});
   const nav = h("header", {class:"nav"},
     h("div", {class:"l"}, backLabel ? h("button", {class:"navbtn", onclick: pop, "aria-label":"戻る"}, h("span", {html:I.back}), backLabel) : null),
     h("div", {class:"t"}, title || ""),
     h("div", {class:"r"}, right));
-  el.append(nav);
-  el.addEventListener("scroll", () => nav.classList.toggle("scrolled", el.scrollTop > 36), {passive:true});
-  return {el, nav};
+  root.append(el, nav);
+  let on = false;
+  el.addEventListener("scroll", () => { const v = el.scrollTop > 30; if (v !== on){ on = v; nav.classList.toggle("scrolled", v); } }, {passive:true});
+  return {el, nav, root};
 }
 function setNavTitle(nav, text){ nav.querySelector(".t").textContent = text; }
 function searchBox(placeholder, oninput, id){
@@ -550,7 +576,7 @@ function chip(tag, opts = {}){
 function FoldersScreen(){
   let editing = false, q = "";
   const editBtn = h("button", {class:"navbtn", onclick: () => { editing = !editing; editBtn.textContent = editing ? "完了" : "編集"; editBtn.classList.toggle("bold", editing); render(); }}, "編集");
-  const {el, nav} = screenShell({title:"フォルダ", right:[editBtn]});
+  const {el, nav, root} = screenShell({title:"フォルダ", right:[editBtn]});
   const body = h("div");
   el.append(h("h1", {class:"big"}, "フォルダ"), searchBox("検索", v => { q = v; render(); }, "q-folders"), body,
     h("footer", {class:"tbar"},
@@ -586,7 +612,7 @@ function FoldersScreen(){
         h("span", {class:"ic", html:I.cal}), h("span", {class:"lb"}, "今日のメモ"),
         h("span", {class:"ct"}, (new Date().getMonth()+1) + "/" + new Date().getDate()), h("span", {class:"chev", html:I.chev}))));
 
-    body.append(h("div", {class:"sechead"}, "メモ"));
+    body.append(h("div", {class:"sechead"}, "このiPhone"));
     const g = h("div", {class:"group"});
     g.append(folderRow("all", "すべてのメモ", live.length, I.allnotes));
     const sysOrder = [SYS.notes, SYS.daily];
@@ -619,7 +645,7 @@ function FoldersScreen(){
       h("span", {class:"ic", html:icon}), h("span", {class:"lb"}, name), h("span", {class:"ct"}, String(count)), h("span", {class:"chev", html:I.chev}));
   }
   render();
-  return {el, refresh: render};
+  return {el: root, refresh: render};
 }
 
 function searchResults(q){
@@ -630,7 +656,7 @@ function searchResults(q){
     wrap.append(h("div", {class:"sechead small"}, "タグ"), h("div", {class:"tagcloud"}, tagHits.map(t => chip(t.tag, {count:t.lines}))));
   }
   const hits = liveNotes().filter(n => {
-    const box = document.createElement("div"); box.innerHTML = n.html; return (box.textContent || "").toLowerCase().includes(s);
+    return (n.plain || "").includes(s);
   }).sort((a, b) => b.updatedAt - a.updatedAt);
   wrap.append(h("div", {class:"sechead small"}, "メモ " + hits.length + "件"));
   if (hits.length){ const g = h("div", {class:"group"}); hits.forEach(n => g.append(noteRow(n, {showFolder:true}))); wrap.append(g); }
@@ -654,28 +680,60 @@ function noteRow(n, {showFolder = false, trash = false, onChange} = {}){
     showFolder || trash ? h("div", {class:"fold"}, h("span", {html:I.folder, style:"transform:scale(.6);margin:-4px"}), trash ? "残り" + Math.max(0, 30 - Math.floor((Date.now() - n.deletedAt) / 864e5)) + "日" : folderName(n.folderId)) : null,
     n.tags && n.tags.length ? h("div", {class:"dots"}, n.tags.slice(0, 6).map(t => chip(t, {sm:true, button:false}))) : null);
   const wrap = h("div", {class:"swipe"},
-    h("div", {class:"acts"}, acts.map(a => h("button", {class:a.cls, onclick: e => { e.stopPropagation(); close(); a.fn(); }}, h("span", {html:a.icon}), a.label))),
+    trash ? null : h("div", {class:"lead"}, h("span", {html:I.pinL})),
+    h("div", {class:"acts"}, acts.map(a => h("button", {class:a.cls, onclick: e => { e.stopPropagation(); close(); run(a); }}, h("span", {html:a.icon}), a.label))),
     inner);
-  let x0 = 0, y0 = 0, dx = 0, mode = null, isOpen = false;
-  function close(){ inner.style.transform = ""; isOpen = false; if (openSwipe === close) openSwipe = null; }
+  // deleting/moving out collapses the row first, like UITableView
+  function collapse(after){
+    wrap.style.height = wrap.offsetHeight + "px"; wrap.getBoundingClientRect();
+    wrap.classList.add("gone"); wrap.style.height = "0px";
+    setTimeout(after, 280);
+  }
+  function run(a){
+    if (a.cls === "a-del" && !trash){ collapse(() => a.fn()); return; }
+    a.fn();
+  }
+  let x0 = 0, y0 = 0, dx = 0, mode = null, isOpen = false, lp = null, longFired = false;
+  function close(){ inner.style.transform = ""; isOpen = false; wrap.classList.remove("leading"); if (openSwipe === close) openSwipe = null; }
   inner.addEventListener("touchstart", e => {
     if (openSwipe && openSwipe !== close) openSwipe();
-    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; mode = null; dx = 0;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; mode = null; dx = 0; longFired = false;
+    clearTimeout(lp);
+    if (!trash) lp = setTimeout(() => { longFired = true; inner.classList.add("pressed"); rowMenu(); }, 500);
   }, {passive:true});
   inner.addEventListener("touchmove", e => {
     const mx = e.touches[0].clientX - x0, my = e.touches[0].clientY - y0;
+    if (Math.abs(mx) > 6 || Math.abs(my) > 6) clearTimeout(lp);
     if (!mode) mode = Math.abs(mx) > Math.abs(my) + 4 && x0 > 30 ? "x" : (Math.abs(my) > 6 ? "y" : null);
     if (mode !== "x") return;
-    dx = Math.min(0, Math.max(-W - 30, (isOpen ? -W : 0) + mx));
+    const base = isOpen ? -W : 0;
+    dx = base + mx;
+    if (trash) dx = Math.min(0, dx);
+    dx = Math.max(-innerWidth * 0.85, Math.min(innerWidth * 0.5, dx));
+    wrap.classList.toggle("leading", dx > 0);
     inner.classList.add("drag"); inner.style.transform = "translateX(" + dx + "px)";
   }, {passive:true});
   inner.addEventListener("touchend", () => {
-    inner.classList.remove("drag");
+    clearTimeout(lp); inner.classList.remove("drag");
     if (mode !== "x") return;
+    if (dx > 70 && !trash){ close(); run(acts[0]); return; }                       // swipe right: pin
+    if (dx < -innerWidth * 0.55 && !trash){ inner.style.transform = "translateX(-100%)"; run(acts[acts.length - 1]); return; } // full swipe: delete
     if (dx < -W / 2){ inner.style.transform = "translateX(" + (-W) + "px)"; isOpen = true; openSwipe = close; }
     else close();
   });
+  inner.addEventListener("touchcancel", () => clearTimeout(lp));
+  async function rowMenu(){
+    const a = await sheet(n.title, [
+      {label: n.pinned ? "固定を解除" : "メモを固定", value:"pin"},
+      {label:"移動", value:"move"},
+      {label:"削除", value:"del", danger:true}]);
+    inner.classList.remove("pressed");
+    if (a === "pin") run(acts[0]);
+    if (a === "move") run(acts[1]);
+    if (a === "del") run(acts[2]);
+  }
   inner.addEventListener("click", async () => {
+    if (longFired){ longFired = false; return; }
     if (mode === "x" || isOpen){ if (isOpen) close(); return; }
     if (trash){
       const a = await sheet("「最近削除した項目」のメモは、復元するまで編集できません。", [{label:"復元", value:"r"}, {label:"完全に削除", value:"d", danger:true}]);
@@ -685,6 +743,7 @@ function noteRow(n, {showFolder = false, trash = false, onChange} = {}){
     }
     push(() => EditorScreen(n.id));
   });
+  inner.addEventListener("contextmenu", e => { if (!trash){ e.preventDefault(); rowMenu(); } });
   return wrap;
 }
 async function moveNote(n){
@@ -699,7 +758,7 @@ async function moveNote(n){
 function ListScreen(folderId, backLabel){
   let q = "";
   const isTrash = folderId === "trash";
-  const {el, nav} = screenShell({backLabel, title: folderName(folderId)});
+  const {el, nav, root} = screenShell({backLabel, title: folderName(folderId)});
   const body = h("div");
   const count = h("span", {class:"mid"});
   el.append(h("h1", {class:"big"}, folderName(folderId)), searchBox("検索", v => { q = v; render(); }, "q-list"), body,
@@ -707,7 +766,7 @@ function ListScreen(folderId, backLabel){
       isTrash ? h("span", {style:"width:36px"}) : h("button", {"aria-label":"新規メモ", html:I.compose, onclick: () => openNewNote(folderId === "all" ? SYS.notes : folderId)})));
   function notes(){
     let ns = isTrash ? S.notes.filter(n => n.deletedAt) : liveNotes().filter(n => folderId === "all" || n.folderId === folderId);
-    if (q.trim()){ const s = q.trim().toLowerCase(); ns = ns.filter(n => { const b = document.createElement("div"); b.innerHTML = n.html; return b.textContent.toLowerCase().includes(s); }); }
+    if (q.trim()){ const s = q.trim().toLowerCase(); ns = ns.filter(n => (n.plain || "").includes(s)); }
     return ns.sort((a, b) => b.updatedAt - a.updatedAt);
   }
   function render(){
@@ -732,7 +791,7 @@ function ListScreen(folderId, backLabel){
     }
   }
   render();
-  return {el, refresh: render, label: folderName(folderId)};
+  return {el: root, refresh: render, label: folderName(folderId)};
 }
 
 // ---------- screen: tag page ----------
@@ -742,7 +801,7 @@ function TagScreen(tag, backLabel){
   const selected = new Set();
   const colorBtn = h("button", {class:"navbtn", "aria-label":"色を変更", html:I.more, onclick: pickColor});
   const selBtn = h("button", {class:"navbtn", onclick: () => { selecting = !selecting; selected.clear(); if (selecting) mode = "lines"; render(); }}, "選択");
-  const {el, nav} = screenShell({backLabel, title:"#" + tag, right:[selBtn, colorBtn]});
+  const {el, nav, root} = screenShell({backLabel, title:"#" + tag, right:[selBtn, colorBtn]});
   el.style.setProperty("--tc", tagColor(tag));
   const title = h("h1", {class:"big tagtitle"}, "#" + tag);
   const sub = h("p", {class:"note", style:"margin:-6px 16px 12px"});
@@ -820,7 +879,7 @@ function TagScreen(tag, backLabel){
     }
   }
   render();
-  return {el, refresh: render, label: "#" + tag};
+  return {el: root, refresh: render, label: "#" + tag};
 }
 
 // Must be called directly inside a tap: iPhone refuses clipboard writes that happen later.
@@ -895,7 +954,7 @@ function EditorScreen(noteId, opts = {}){
   const moreBtn = h("button", {class:"navbtn", "aria-label":"その他", html:I.more, onclick: moreMenu});
   const top = stack[stack.length - 1];
   const back = (top && top.label) || folderName(note.folderId);
-  const {el, nav} = screenShell({paper:true, backLabel: back, right:[shareBtn, moreBtn, doneBtn]});
+  const {el, nav, root} = screenShell({paper:true, backLabel: back, right:[shareBtn, moreBtn, doneBtn]});
   const when = h("div", {class:"when"}, longDate(note.updatedAt));
   const ed = h("div", {class:"editor", contenteditable:"true", spellcheck:"false", autocapitalize:"off", "aria-label":"メモ本文", id:"ed-" + note.id});
   ed.innerHTML = note.html;
@@ -910,7 +969,21 @@ function EditorScreen(noteId, opts = {}){
   const kbar = h("div", {class:"ktbar"}, kAa, kCk, kList, kTag, kImg);
   const fmt = h("div", {class:"panel"});
   const tagp = h("div", {class:"panel"});
-  el.append(when, ed, kbar, fmt, tagp);
+  const vbar = h("footer", {class:"tbar"},
+    h("button", {"aria-label":"チェックリスト", html:I.check, onclick: () => startTyping(b => { b.classList.add("ck"); b.dataset.done = "0"; })}),
+    h("button", {"aria-label":"写真", html:I.camera, onclick: () => { startTyping(); kImg.click(); }}),
+    h("button", {"aria-label":"新規メモ", html:I.compose, onclick: () => openNewNote(note.folderId === "daily" ? SYS.notes : note.folderId, true)}));
+  el.append(when, ed, kbar, fmt, tagp, vbar);
+  // focus at the end on a new line (inside the tap, so the keyboard opens)
+  function startTyping(fn){
+    ed.focus({preventScroll:true});
+    const last = ed.lastElementChild;
+    let b = last && !last.textContent.trim() && !last.querySelector("img") ? last : null;
+    if (!b){ b = h("div", {"data-t": Date.now()}, h("br")); ed.append(b); }
+    fn && fn(b);
+    placeCaret(b, 0); keepRange(); scheduleSave();
+    setTimeout(() => b.scrollIntoView({block:"center"}), 50);
+  }
   function pd(e){ e.preventDefault(); }
 
   // --- selection helpers
@@ -969,7 +1042,7 @@ function EditorScreen(noteId, opts = {}){
 
   // --- save
   let saveT = null, dirty = false;
-  function scheduleSave(){ dirty = true; clearTimeout(saveT); saveT = setTimeout(saveNow, 500); }
+  function scheduleSave(){ dirty = true; clearTimeout(saveT); saveT = setTimeout(saveNow, 900); }
   async function saveNow(){
     clearTimeout(saveT); if (!dirty) return; dirty = false;
     decorate();
@@ -1017,6 +1090,7 @@ function EditorScreen(noteId, opts = {}){
     scheduleSave();
   });
   ed.addEventListener("compositionend", () => { const b = caretBlock(); if (b) wrapTags(b, false); scheduleSave(); });
+  el.addEventListener("click", e => { if (e.target === el || e.target === when) startTyping(); });
   ed.addEventListener("click", e => {
     const ck = e.target.closest && e.target.closest(".ck");
     if (ck){
@@ -1026,11 +1100,11 @@ function EditorScreen(noteId, opts = {}){
     const tg = e.target.closest && e.target.closest(".tag");
     if (tg && document.activeElement !== ed) openTag(tg.textContent.slice(1));
   });
-  ed.addEventListener("focus", () => { kbar.classList.add("on"); doneBtn.style.display = ""; shareBtn.style.display = "none"; moreBtn.style.display = "none"; placeBars(); });
+  ed.addEventListener("focus", () => { vbar.style.display = "none"; kbar.classList.add("on"); doneBtn.style.display = ""; shareBtn.style.display = "none"; moreBtn.style.display = "none"; placeBars(); });
   ed.addEventListener("blur", () => {
     setTimeout(() => {
       if (document.activeElement === ed || el.contains(document.activeElement)) return;
-      kbar.classList.remove("on"); fmt.classList.remove("on"); tagp.classList.remove("on"); kAa.classList.remove("on"); kTag.classList.remove("on");
+      kbar.classList.remove("on"); fmt.classList.remove("on"); tagp.classList.remove("on"); kAa.classList.remove("on"); kTag.classList.remove("on"); vbar.style.display = "";
       doneBtn.style.display = "none"; shareBtn.style.display = ""; moreBtn.style.display = "";
       blocksOf(ed).forEach(b => wrapTags(b, true)); unwrapBadTags(); dirty = true; saveNow();
     }, 120);
@@ -1198,7 +1272,7 @@ function EditorScreen(noteId, opts = {}){
 
   setNavTitle(nav, note.title);
   return {
-    el, label: "メモ",
+    el: root, label: "メモ",
     onShow(){
       if (opts.focusT || opts.focusI != null){
         const bs = blocksOf(ed);
@@ -1206,7 +1280,7 @@ function EditorScreen(noteId, opts = {}){
         if (target && target.nodeType === 1) setTimeout(() => { target.scrollIntoView({block:"center", behavior:"smooth"}); target.classList.add("flash"); setTimeout(() => target.classList.remove("flash"), 1700); }, 380);
       }
       if (opts.focusEnd){
-        ed.focus();
+        ed.focus({preventScroll:true});
         if (opts.appendTag){
           const nb = h("div", {"data-t": Date.now()});
           const sp = h("span", {class:"tag", "--tc": tagColor(opts.appendTag)}, "#" + opts.appendTag);
@@ -1249,17 +1323,17 @@ function shrink(file){
 }
 
 // ---------- entry points ----------
-async function openNewNote(folderId){
-  const n = await createNote(folderId, '<div data-t="' + Date.now() + '"><br></div>');
-  push(() => EditorScreen(n.id, {focusEnd:true}));
+function openNewNote(folderId, replace){
+  const n = createNote(folderId, '<div data-t="' + Date.now() + '"><br></div>');
+  (replace ? replaceTop : push)(() => EditorScreen(n.id, {focusEnd:true}));
 }
-async function openToday(opts = {}){
+function openToday(opts = {}){
   const key = dayKey(Date.now());
   let n = liveNotes().find(x => x.folderId === SYS.daily && x.dailyKey === key);
   if (!n){
     const d = new Date(), t = Date.now();
-    n = await createNote(SYS.daily, '<div data-t="' + t + '">' + d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日（" + WD[d.getDay()] + '）</div><div data-t="' + t + '"><br></div>');
-    n.dailyKey = key; await idb.put("notes", n);
+    n = createNote(SYS.daily, '<div data-t="' + t + '">' + d.getFullYear() + "年" + (d.getMonth()+1) + "月" + d.getDate() + "日（" + WD[d.getDay()] + '）</div><div data-t="' + t + '"><br></div>');
+    n.dailyKey = key; idb.put("notes", n);
   }
   push(() => EditorScreen(n.id, {focusEnd:true, appendTag: opts.appendTag}));
 }
@@ -1304,7 +1378,7 @@ $("#importpick").addEventListener("change", async e => {
   for (const n of S.notes.filter(n => n.deletedAt && Date.now() - n.deletedAt > 30 * 864e5)) await purgeNote(n);
   if (!S.notes.length){
     const t = Date.now();
-    await createNote(SYS.notes,
+    createNote(SYS.notes,
       '<div data-t="' + t + '">メモ+ へようこそ</div>' +
       '<div data-t="' + t + '">純正メモと同じように書けます。行の中に <span class="tag" style="--tc:' + tagColor("使い方") + '">#使い方</span> のようにタグを書くと、その行がジャンルに自動で集まります。</div>' +
       '<div data-t="' + t + '">カレー 玉ねぎは飴色まで炒める <span class="tag" style="--tc:' + tagColor("料理") + '">#料理</span></div>' +

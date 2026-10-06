@@ -1,6 +1,6 @@
 // Offline cache: the page itself is fetched fresh when online (so updates show up right away),
 // everything falls back to the cache when offline.
-const CACHE = "memo-plus-v4";
+const CACHE = "memo-plus-v5";
 const SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
