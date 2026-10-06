@@ -1,5 +1,6 @@
-// Offline cache: serve the app shell from cache, refresh it in the background.
-const CACHE = "memo-plus-v1";
+// Offline cache: the page itself is fetched fresh when online (so updates show up right away),
+// everything falls back to the cache when offline.
+const CACHE = "memo-plus-v2";
 const SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
@@ -17,7 +18,12 @@ self.addEventListener("fetch", e => {
   const key = e.request.mode === "navigate" ? "./index.html" : e.request;
   e.respondWith(caches.open(CACHE).then(async cache => {
     const hit = await cache.match(key);
-    const net = fetch(e.request).then(res => { if (res.ok) cache.put(key, res.clone()); return res; }).catch(() => hit);
+    const net = fetch(e.request, {cache: "no-store"}).then(res => { if (res.ok) cache.put(key, res.clone()); return res; }).catch(() => hit);
+    if (e.request.mode === "navigate"){
+      // prefer the network for the page, but don't hang on a bad connection
+      const timeout = new Promise(r => setTimeout(() => r(hit), 2500));
+      return (await Promise.race([net, hit ? timeout : net])) || net;
+    }
     return hit || net;
   }));
 });

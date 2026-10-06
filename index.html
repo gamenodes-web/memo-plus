@@ -111,6 +111,16 @@ svg{display:block}
 .lrow .mt{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:6px;color:var(--sec);font-size:13px}
 .lrow .mt .tm{font-variant-numeric:tabular-nums}
 .lrow:active{background:var(--fill)}
+.lrow.priv:not(.shown) .tx{filter:blur(6px);-webkit-user-select:none;user-select:none}
+.lrow .lock{display:inline-flex;align-items:center;gap:3px;color:var(--danger);font-size:12px;font-weight:600}
+.lrow.selecting{padding-left:52px}
+.lrow .cb{position:absolute;left:16px;top:50%;width:24px;height:24px;margin-top:-12px;border-radius:50%;border:1.5px solid var(--ter)}
+.lrow.on .cb{background:var(--accent);border-color:var(--accent)}
+.lrow.on .cb::after{content:"";position:absolute;left:7px;top:3px;width:6px;height:11px;border:solid var(--paper);border-width:0 2px 2px 0;transform:rotate(45deg)}
+.tbar .ai{font-weight:600;font-size:16px;padding:0 4px;gap:4px}
+.tbar .txtbtn{font-size:16px;padding:0 4px}
+.panel .sub{font-size:13px;color:var(--sec);margin:10px 0 6px}
+.chip .x{color:var(--sec);margin-left:2px;font-size:14px;line-height:1}
 .daylabel{margin:18px 32px 6px;font-size:13px;color:var(--sec);font-weight:600}
 
 .seg{display:flex;margin:0 16px 8px;background:var(--fill);border-radius:9px;padding:2px}
@@ -153,6 +163,9 @@ svg{display:block}
 .editor .ck.tagged{padding-left:42px}
 .editor .ck.tagged::before{left:12px}
 .editor .ck.tagged[data-done="1"]::after{left:19px}
+.editor .rt{background:color-mix(in srgb,var(--tc) 18%,transparent);border-bottom:2px solid var(--tc);border-radius:3px}
+.editor [data-rtl]::after{content:attr(data-rtl);font-size:12px;font-weight:600;color:var(--tc);margin-left:5px;-webkit-user-select:none;user-select:none;pointer-events:none}
+.editor [data-rt]:not(.rt){background:color-mix(in srgb,var(--tc) 9%,transparent);box-shadow:inset 3px 0 0 var(--tc);padding-left:10px;margin-left:-13px}
 .editor .flash{animation:flash 1.6s ease}
 @keyframes flash{0%,40%{background:color-mix(in srgb,var(--accent) 35%,transparent)}100%{background:transparent}}
 .editor:empty::before{content:"書きなぐる…";color:var(--ter)}
@@ -293,6 +306,7 @@ const SYS = { notes:"notes", daily:"daily" };
 const S = { notes:[], folders:[], tagColors:{} };
 const TAG_RE = /[#＃]([^\s#＃.,、。!！?？()（）「」『』\[\]【】]+)/g;
 const PALETTE = 8;
+const PRIV = "個人情報";
 
 function noteById(id){ return S.notes.find(n => n.id === id); }
 function folderName(id){
@@ -302,6 +316,7 @@ function folderName(id){
 }
 function liveNotes(){ return S.notes.filter(n => !n.deletedAt); }
 function tagColor(tag){
+  if (tag === PRIV && S.tagColors[tag] == null) return "var(--danger)";
   if (S.tagColors[tag] != null) return "var(--h" + S.tagColors[tag] + ")";
   let x = 0; for (const ch of tag) x = (x * 31 + ch.codePointAt(0)) >>> 0;
   return "var(--h" + (x % 7) + ")";
@@ -330,23 +345,54 @@ function blocksOf(root){
 }
 function tagsIn(text){ const t = []; for (const m of text.matchAll(TAG_RE)) if (!t.includes(m[1])) t.push(m[1]); return t; }
 function stripTags(text){ return text.replace(TAG_RE, "").replace(/[ \t　 ]+/g, " ").trim(); }
+function rtOf(el){ return el && el.nodeType === 1 && el.dataset.rt ? el.dataset.rt.split(" ").filter(Boolean) : []; }
+// text with private parts masked (titles, previews, AI)
+function pubText(b){
+  if (b.nodeType === 3) return b.textContent.trim();
+  const tags = [...tagsIn(b.textContent || ""), ...rtOf(b)];
+  if (tags.includes(PRIV)) return "••••";
+  const c = b.cloneNode(true);
+  for (const sp of c.querySelectorAll(".rt[data-rt]")) if (rtOf(sp).includes(PRIV)) sp.textContent = "••••";
+  return (c.textContent || "").replace(/\u200b/g, "").trim();
+}
 function derive(note){
   const box = document.createElement("div"); box.innerHTML = note.html || "";
   const blocks = blocksOf(box);
-  const texts = []; const lines = []; let hasImg = !!box.querySelector("img");
+  const texts = []; const lines = []; const groups = new Map();
+  const hasImg = !!box.querySelector("img");
+  const fallbackT = note.updatedAt || note.createdAt;
   blocks.forEach((b, i) => {
-    const text = (b.textContent || "").replace(/​/g, "").trim();
-    if (text) texts.push(text);
-    const tags = tagsIn(text);
-    if (tags.length) lines.push({ t: +(b.dataset && b.dataset.t) || note.updatedAt || note.createdAt, text, tags, i, done: b.dataset && b.dataset.done === "1" });
+    const el = b.nodeType === 1 ? b : null;
+    const text = (b.textContent || "").replace(/\u200b/g, "").trim();
+    const t = (el && +el.dataset.t) || fallbackT;
+    const pub = pubText(b);
+    if (text) texts.push(pub);
+    // inline range tags
+    if (el) for (const sp of el.querySelectorAll(".rt[data-rt]")){
+      const st = sp.textContent.trim(); if (!st) continue;
+      lines.push({t, text: st, tags: rtOf(sp), i, inline: true});
+    }
+    const tags = [...new Set([...tagsIn(text), ...rtOf(el)])];
+    if (!tags.length || !text) return;
+    const g = el && el.dataset.g;
+    if (g && groups.has(g)){
+      const e = groups.get(g); e.pub = (e.pub ?? e.text) + "\n" + pub; e.text += "\n" + text;
+      for (const x of tags) if (!e.tags.includes(x)) e.tags.push(x);
+      return;
+    }
+    const e = {t, text, tags, i, done: !!(el && el.dataset.done === "1")};
+    if (pub !== text) e.pub = pub;
+    lines.push(e); if (g) groups.set(g, e);
   });
-  note.title = texts[0] ? stripTags(texts[0]) || texts[0] : (hasImg ? "画像" : "新規メモ");
-  note.preview = texts.slice(1).join(" ").slice(0, 120) || (hasImg ? "画像" : "追加テキストなし");
+  for (const e of lines) if (e.pub === e.text) delete e.pub;
+  note.title = texts[0] ? (stripTags(texts[0]) || texts[0]) : (hasImg ? "画像" : "新規メモ");
+  note.preview = texts.slice(1).map(stripTags).join(" ").slice(0, 120) || (hasImg ? "画像" : "追加テキストなし");
   note.lines = lines;
   note.tags = [...new Set(lines.flatMap(l => l.tags))];
   note.empty = !texts.length && !hasImg;
   return note;
 }
+function isPriv(l){ return l.tags.includes(PRIV); }
 
 // ---------- dates ----------
 const WD = ["日","月","火","水","木","金","土"];
@@ -688,19 +734,21 @@ function ListScreen(folderId, backLabel){
 }
 
 // ---------- screen: tag page ----------
+const I_SPARK = '<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9zM18.5 15l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9z" fill="currentColor"/></svg>';
 function TagScreen(tag, backLabel){
-  let mode = "lines";
+  let mode = "lines", selecting = false;
+  const selected = new Set(); const shown = new Set();
   const colorBtn = h("button", {class:"navbtn", "aria-label":"色を変更", html:I.more, onclick: pickColor});
-  const {el, nav} = screenShell({backLabel, title:"#" + tag, right:[colorBtn]});
+  const selBtn = h("button", {class:"navbtn", onclick: () => { selecting = !selecting; selected.clear(); if (selecting) mode = "lines"; render(); }}, "選択");
+  const {el, nav} = screenShell({backLabel, title:"#" + tag, right:[selBtn, colorBtn]});
   el.style.setProperty("--tc", tagColor(tag));
   const title = h("h1", {class:"big tagtitle"}, "#" + tag);
   const sub = h("p", {class:"note", style:"margin:-6px 16px 12px"});
   const segL = h("button", {type:"button", onclick: () => { mode = "lines"; render(); }}, "行ごと");
-  const segN = h("button", {type:"button", onclick: () => { mode = "notes"; render(); }}, "メモごと");
+  const segN = h("button", {type:"button", onclick: () => { mode = "notes"; selecting = false; render(); }}, "メモごと");
   const body = h("div");
-  el.append(title, sub, h("div", {class:"seg"}, segL, segN), body,
-    h("footer", {class:"tbar"}, h("span", {style:"width:36px"}), h("span", {class:"mid"}, "新しい順"),
-      h("button", {"aria-label":"#" + tag + " で書く", html:I.compose, onclick: () => openToday({appendTag: tag})})));
+  const bar = h("footer", {class:"tbar"});
+  el.append(title, sub, h("div", {class:"seg"}, segL, segN), body, bar);
 
   async function pickColor(){
     const cur = tagIndex(tag);
@@ -711,14 +759,34 @@ function TagScreen(tag, backLabel){
         h("div", {class:"btns"}, h("button", {onclick: () => ov.remove()}, "閉じる"))));
     document.body.append(ov);
   }
+  function collect(){
+    const lines = [];
+    for (const n of liveNotes()) for (const l of n.lines || []) if (l.tags.includes(tag))
+      lines.push({...l, note:n, key: n.id + ":" + l.i + (l.inline ? ":" + l.text.slice(0, 20) : "")});
+    return lines.sort((a, b) => b.t - a.t);
+  }
+  function renderBar(lines){
+    bar.replaceChildren();
+    if (selecting){
+      const all = lines.length && lines.every(l => selected.has(l.key));
+      bar.append(
+        h("button", {class:"txtbtn", onclick: () => { if (all) selected.clear(); else lines.forEach(l => selected.add(l.key)); render(); }}, all ? "選択解除" : "すべて選択"),
+        h("span", {class:"mid"}, selected.size + "件選択"),
+        h("button", {class:"ai", disabled: selected.size ? null : true, onclick: () => sendToAI(tag, lines.filter(l => selected.has(l.key)))}, h("span", {html:I_SPARK}), "AIで整理"));
+    } else {
+      bar.append(h("span", {style:"width:36px"}), h("span", {class:"mid"}, "新しい順"),
+        h("button", {"aria-label":"#" + tag + " で書く", html:I.compose, onclick: () => openToday({appendTag: tag})}));
+    }
+  }
   function render(){
     segL.setAttribute("aria-pressed", mode === "lines"); segN.setAttribute("aria-pressed", mode === "notes");
+    selBtn.textContent = selecting ? "キャンセル" : "選択"; selBtn.classList.toggle("bold", selecting);
+    colorBtn.style.display = selecting ? "none" : "";
     body.replaceChildren();
-    const lines = [];
-    for (const n of liveNotes()) for (const l of n.lines || []) if (l.tags.includes(tag)) lines.push({...l, note:n});
-    lines.sort((a, b) => b.t - a.t);
+    const lines = collect();
     const notes = [...new Set(lines.map(l => l.note))].sort((a, b) => b.updatedAt - a.updatedAt);
-    sub.textContent = lines.length + "行 · " + notes.length + "件のメモ";
+    sub.textContent = lines.length + "件 · " + notes.length + "件のメモ";
+    renderBar(lines);
     if (!lines.length){
       body.append(h("div", {class:"empty"}, h("b", null, "まだありません"), "右下のボタンで、今日のメモに #" + tag + " 付きの行を追加できます。"));
       return;
@@ -728,11 +796,22 @@ function TagScreen(tag, backLabel){
       for (const l of lines){
         const k = dayKey(l.t);
         if (k !== cur){ cur = k; body.append(h("div", {class:"daylabel"}, dayTitle(l.t))); g = h("div", {class:"group"}); body.append(g); }
-        const others = l.tags.filter(t => t !== tag);
-        g.append(h("button", {class:"lrow", "--tc": tagColor(tag), onclick: () => push(() => EditorScreen(l.note.id, {focusT: l.t, focusI: l.i}))},
+        const others = l.tags.filter(t => t !== tag && t !== PRIV);
+        const priv = isPriv(l) || l.pub != null;
+        const row = h("button", {class:"lrow" + (priv ? " priv" : "") + (selecting ? " selecting" : "") + (selected.has(l.key) ? " on" : "") + (shown.has(l.key) ? " shown" : ""), "--tc": tagColor(tag)},
+          selecting ? h("span", {class:"cb"}) : null,
           h("div", {class:"tx", style: l.done ? "text-decoration:line-through;color:var(--sec)" : null}, stripTags(l.text) || l.text),
-          h("div", {class:"mt"}, h("span", {class:"tm"}, hm(l.t)), "·", h("span", null, l.note.title), others.map(t => chip(t, {sm:true, button:false})))));
+          h("div", {class:"mt"}, h("span", {class:"tm"}, hm(l.t)), "·", h("span", null, l.note.title),
+            priv ? h("span", {class:"lock"}, isPriv(l) ? "個人情報 · AIに送りません" : "一部に個人情報（AIには伏せて送ります）") : null,
+            others.map(t => chip(t, {sm:true, button:false}))));
+        row.addEventListener("click", () => {
+          if (selecting){ selected.has(l.key) ? selected.delete(l.key) : selected.add(l.key); render(); return; }
+          if (priv && !shown.has(l.key)){ shown.add(l.key); row.classList.add("shown"); return; }
+          push(() => EditorScreen(l.note.id, {focusT: l.t, focusI: l.i}));
+        });
+        g.append(row);
       }
+      if (!selecting) body.append(h("p", {class:"note", style:"margin-top:14px"}, "右上の「選択」から、行をまとめてAIに整理してもらえます。"));
     } else {
       const g = h("div", {class:"group"}); notes.forEach(n => g.append(noteRow(n, {showFolder:true, onChange: render}))); body.append(g);
     }
@@ -740,6 +819,35 @@ function TagScreen(tag, backLabel){
   render();
   return {el, refresh: render, label: "#" + tag};
 }
+
+async function sendToAI(tag, entries){
+  const skip = entries.filter(isPriv);
+  const ok = entries.filter(l => !isPriv(l)).sort((a, b) => a.t - b.t);
+  if (!ok.length){ toast("個人情報の行はAIに送れません"); return; }
+  const md = t => { const d = new Date(t); return (d.getMonth()+1) + "/" + d.getDate(); };
+  const body = ok.map(l => "- (" + md(l.t) + ") " + stripTags(l.pub ?? l.text).replace(/\n/g, "\n  ")).join("\n");
+  const prompt = "以下は私のメモのうち「#" + tag + "」に分類した" + ok.length + "件です。\n" +
+    "重複している内容は1つにまとめ、似た話題ごとに見出しを付けて、見やすく整理してください。情報は削らず、食い違いがあれば指摘してください。\n\n" + body;
+  const msg = (skip.length ? "個人情報タグの付いた" + skip.length + "件は送りません。" : "") + ok.length + "件を整理の指示と一緒に送ります。";
+  const a = await sheet(msg, [
+    {label:"Claudeで整理する", value:"claude"},
+    {label:"ほかのAIアプリに送る", value:"share"},
+    {label:"コピーする", value:"copy"}]);
+  if (!a) return;
+  const copy = async () => { try { await navigator.clipboard.writeText(prompt); return true; } catch(e){ return false; } };
+  if (a === "copy"){ toast(await copy() ? "コピーしました。AIに貼り付けてください" : "コピーできませんでした"); return; }
+  if (a === "share"){
+    if (navigator.share){ try { await navigator.share({text: prompt}); } catch(e){} }
+    else toast(await copy() ? "コピーしました。AIに貼り付けてください" : "共有できませんでした");
+    return;
+  }
+  const q = encodeURIComponent(prompt);
+  const win = window.open(q.length < 6000 ? "https://claude.ai/new?q=" + q : "https://claude.ai/new", "_blank");
+  const copied = await copy();
+  if (q.length >= 6000) toast(copied ? "長いのでコピーしました。Claudeに貼り付けてください" : "長すぎて送れませんでした。行を減らしてください");
+  else if (!win) toast(copied ? "コピーしました。Claudeを開いて貼り付けてください" : "Claudeを開けませんでした");
+}
+
 function openTag(tag){
   const top = stack[stack.length - 1];
   const label = top && top.label ? top.label : "戻る";
@@ -817,11 +925,12 @@ function EditorScreen(noteId, opts = {}){
     }
   }
   function decorate(){
+    for (const el of ed.querySelectorAll("[data-rt]")){ const l = rtOf(el); if (l.length) el.style.setProperty("--tc", tagColor(l[0])); }
     for (const b of blocksOf(ed)){
       if (b.nodeType !== 1) continue;
       const tags = tagsIn(b.textContent || "");
       if (tags.length){ b.classList.add("tagged"); b.style.setProperty("--tc", tagColor(tags[0])); }
-      else if (b.classList.contains("tagged")){ b.classList.remove("tagged"); b.style.removeProperty("--tc"); if (!b.getAttribute("class")) b.removeAttribute("class"); if (!b.getAttribute("style")) b.removeAttribute("style"); }
+      else if (b.classList.contains("tagged")){ b.classList.remove("tagged"); if (!b.dataset.rt) b.style.removeProperty("--tc"); if (!b.getAttribute("class")) b.removeAttribute("class"); if (!b.getAttribute("style")) b.removeAttribute("style"); }
     }
   }
 
@@ -842,8 +951,19 @@ function EditorScreen(noteId, opts = {}){
     if (e.inputType === "insertParagraph"){
       const b = caretBlock();
       if (b && b.classList && b.classList.contains("ck") && !b.textContent.trim()){
-        e.preventDefault(); b.classList.remove("ck"); b.removeAttribute("data-done"); scheduleSave();
-      } else if (b) wrapTags(b, true);
+        e.preventDefault(); b.classList.remove("ck"); b.removeAttribute("data-done"); scheduleSave(); return;
+      }
+      if (b) wrapTags(b, true);
+      // caret at the very end of a tag chip: step outside it so the new line isn't born inside the chip
+      const s = getSelection();
+      if (s.isCollapsed && s.anchorNode){
+        const base = s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentNode;
+        const sp = base && base.closest && base.closest(".tag,.rt");
+        if (sp && ed.contains(sp)){
+          const r = document.createRange(); r.selectNodeContents(sp); r.setStart(s.anchorNode, s.anchorOffset);
+          if (!r.toString()){ const nr = document.createRange(); nr.setStartAfter(sp); nr.collapse(true); s.removeAllRanges(); s.addRange(nr); }
+        }
+      }
     }
   });
   ed.addEventListener("input", e => {
@@ -852,8 +972,12 @@ function EditorScreen(noteId, opts = {}){
       if (e.inputType === "insertParagraph"){
         b.dataset.t = Date.now();
         if (b.classList.contains("ck")) b.dataset.done = "0";
-        b.classList.remove("tagged"); b.style.removeProperty("--tc");
-        b.querySelectorAll(".tag").forEach(sp => { if (!sp.textContent) sp.remove(); });
+        b.classList.remove("tagged");
+        let fixed = false;
+        b.querySelectorAll(".tag,.rt").forEach(sp => { if (!sp.textContent){ sp.replaceWith(...sp.childNodes); fixed = true; } });
+        if (!b.textContent.trim()){ for (const k of ["rt","rtl","g"]) delete b.dataset[k]; b.style.removeProperty("--tc"); }
+        if (!b.firstChild){ b.append(document.createElement("br")); fixed = true; }
+        if (fixed) placeCaret(b, 0);
       } else if (!b.dataset.t) b.dataset.t = Date.now();
       if (e.inputType === "insertText" && e.data && /[\s　.,、。!！?？]/.test(e.data.slice(-1)) && !e.isComposing) wrapTags(b, false);
     }
@@ -923,27 +1047,91 @@ function EditorScreen(noteId, opts = {}){
   });
 
   // --- tag picker
+  let rangeMode = false;
+  function setRT(el, list){
+    if (!list.length){
+      for (const k of ["rt","rtl","g"]) delete el.dataset[k];
+      el.style.removeProperty("--tc");
+      if (el.classList.contains("rt")) el.replaceWith(...el.childNodes);
+      return;
+    }
+    el.dataset.rt = list.join(" "); el.dataset.rtl = list.map(t => "#" + t).join(" ");
+    el.style.setProperty("--tc", tagColor(list[0]));
+  }
+  function applyRangeTag(tag){
+    restoreRange();
+    const s = getSelection(); if (!s.rangeCount) return;
+    const r = s.getRangeAt(0); if (r.collapsed) return;
+    const bs = blocksOf(ed).filter(b => b.nodeType === 1 && r.intersectsNode(b));
+    if (!bs.length) return;
+    const whole = bs.length > 1 || r.toString().trim() === bs[0].textContent.trim();
+    if (!whole){
+      const span = h("span", {class:"rt"});
+      span.append(r.extractContents()); r.insertNode(span); setRT(span, [tag]);
+      const nr = document.createRange(); nr.setStartAfter(span); nr.collapse(true); s.removeAllRanges(); s.addRange(nr);
+    } else {
+      const g = bs.length > 1 ? uid() : null;
+      for (const b of bs){
+        const l = rtOf(b); if (!l.includes(tag)) l.push(tag); setRT(b, l);
+        b.dataset.t = b.dataset.t || Date.now();
+        if (g) b.dataset.g = g; else delete b.dataset.g;
+      }
+      s.collapseToEnd();
+    }
+    keepRange();
+  }
+  function caretRT(){
+    if (!savedRange) return null;
+    let n = savedRange.startContainer; if (n.nodeType !== 1) n = n.parentNode;
+    const sp = n && n.closest && n.closest(".rt[data-rt]");
+    if (sp && ed.contains(sp)) return sp;
+    let b = n; while (b && b.parentNode !== ed && !(b.nodeName === "LI" && b.parentNode.parentNode === ed)) b = b.parentNode;
+    return b && b.nodeType === 1 && b !== ed && b.dataset.rt ? b : null;
+  }
+  function removeRT(el, tag){
+    const targets = el.dataset.g ? [...ed.querySelectorAll('[data-g="' + el.dataset.g + '"]')] : [el];
+    for (const x of targets) setRT(x, rtOf(x).filter(t => t !== tag));
+    tagp.classList.remove("on"); kTag.classList.remove("on");
+    scheduleSave(); toast("#" + tag + " を外しました");
+  }
   function insertTag(t){
+    if (rangeMode){
+      applyRangeTag(t);
+      tagp.classList.remove("on"); kTag.classList.remove("on");
+      scheduleSave(); toast("選択範囲を #" + t + " に分類しました");
+      return;
+    }
     restoreRange();
     const b = caretBlock();
-    const before = b && b.textContent && !/[\s　 ]$/.test(b.textContent) ? " " : "";
+    const before = b && b.textContent && !/[\s\u3000\u00a0]$/.test(b.textContent) ? " " : "";
     document.execCommand("insertText", false, before + "#" + t + " ");
     const nb = caretBlock(); if (nb && nb.nodeType === 1){ nb.dataset.t = nb.dataset.t || Date.now(); wrapTags(nb, false); }
     tagp.classList.remove("on"); kTag.classList.remove("on");
     scheduleSave(); toast("#" + t + " に分類しました");
   }
   function renderTagPicker(){
+    rangeMode = !!(savedRange && !savedRange.collapsed && savedRange.toString().trim());
     const newIn = h("input", {type:"text", placeholder:"新しいタグ名", id:"newtag-" + note.id, enterkeyhint:"done"});
     const add = () => { const v = newIn.value.trim().replace(/^[#＃]/, "").replace(/\s+/g, ""); if (v) insertTag(v); };
     newIn.addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing){ e.preventDefault(); add(); } });
-    const tags = allTags();
-    tagp.replaceChildren(
-      h("div", {class:"ttl"}, h("span", null, "この行にタグを付ける"), h("button", {class:"navbtn", onmousedown: pd, onclick: () => { tagp.classList.remove("on"); kTag.classList.remove("on"); }}, "閉じる")),
-      tags.length ? h("div", {class:"tagpick"}, tags.map(t => { const c = chip(t.tag, {onclick: () => insertTag(t.tag)}); c.addEventListener("mousedown", pd); return c; }))
-                  : h("p", {class:"note", style:"margin:0"}, "まだタグがありません。下で作れます。"),
-      h("div", {class:"newtag"}, newIn, h("button", {onclick: add}, "追加")));
+    const tags = [PRIV, ...allTags().map(t => t.tag).filter(t => t !== PRIV)];
+    const pickChip = t => {
+      const c = chip(t, {onclick: () => insertTag(t)}); c.addEventListener("mousedown", pd);
+      if (t === PRIV) c.append(h("span", {class:"n"}, "AIに送らない"));
+      return c;
+    };
+    const cur = rangeMode ? null : caretRT();
+    tagp.replaceChildren(...[
+      h("div", {class:"ttl"}, h("span", null, rangeMode ? "選択範囲にタグを付ける" : "この行にタグを付ける"),
+        h("button", {class:"navbtn", onmousedown: pd, onclick: () => { tagp.classList.remove("on"); kTag.classList.remove("on"); }}, "閉じる")),
+      cur ? h("div", {class:"sub"}, "付いているタグ（タップで外す）") : null,
+      cur ? h("div", {class:"tagpick"}, rtOf(cur).map(t => { const c = chip(t, {onclick: () => removeRT(cur, t)}); c.append(h("span", {class:"x"}, "×")); c.addEventListener("mousedown", pd); return c; })) : null,
+      cur ? h("div", {class:"sub"}, "追加する") : null,
+      h("div", {class:"tagpick"}, tags.map(pickChip)),
+      h("div", {class:"newtag"}, newIn, h("button", {onclick: add}, "追加")),
+      !rangeMode && !cur ? h("p", {class:"note", style:"margin:10px 0 0"}, "文字を選択してから # を押すと、選んだ範囲だけにタグを付けられます。") : null].filter(Boolean));
   }
-  kTag.addEventListener("click", () => { const on = !tagp.classList.contains("on"); if (on) renderTagPicker(); tagp.classList.toggle("on", on); kTag.classList.toggle("on", on); fmt.classList.remove("on"); kAa.classList.remove("on"); placeBars(); });
+  kTag.addEventListener("click", () => { keepRange(); const on = !tagp.classList.contains("on"); if (on) renderTagPicker(); tagp.classList.toggle("on", on); kTag.classList.toggle("on", on); fmt.classList.remove("on"); kAa.classList.remove("on"); placeBars(); });
 
   // --- images
   kImg.addEventListener("click", () => { keepRange(); const p = $("#imgpick"); p.value = ""; p.onchange = async () => {
