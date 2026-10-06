@@ -42,8 +42,9 @@ svg{display:block}
 
 /* ---------- screens ---------- */
 .screen{position:absolute;inset:0;overflow:hidden;background:var(--bg);transition:transform .42s cubic-bezier(.32,.72,0,1);box-shadow:-1px 0 10px rgba(0,0,0,.08)}
-.screen > .scroll{position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-top:calc(env(safe-area-inset-top,0px) + 50px);padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
+.screen > .scroll{position:absolute;inset:0;overflow-y:scroll;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-top:calc(env(safe-area-inset-top,0px) + 50px);padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
 .screen::after{content:"";position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .42s cubic-bezier(.32,.72,0,1);z-index:40}
+.screen > .scroll > .inner{min-height:calc(100% + 1px)}
 .screen.paper{background:var(--paper)}
 .screen.enter{transform:translateX(100%)}
 .screen.under{transform:translateX(-30%)}
@@ -103,7 +104,7 @@ svg{display:block}
 .swipe .acts .a-move{background:#5e5ce6}
 .swipe .acts .a-del{background:var(--danger)}
 .swipe .acts .a-restore{background:var(--blue)}
-.nrow{position:relative;display:block;width:100%;text-align:left;background:var(--cell);padding:11px 16px 11px 20px;transition:transform .25s ease;touch-action:pan-y}
+.nrow{position:relative;display:block;width:100%;text-align:left;background:var(--cell);padding:11px 16px 11px 20px;transition:transform .45s cubic-bezier(.32,.72,0,1);touch-action:pan-y}
 .nrow.drag{transition:none}
 .nrow .tt{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:6px}
 .nrow .tt .pinic{color:var(--pin);flex:none}
@@ -524,11 +525,11 @@ function replaceTop(make){
 
 // edge-swipe back
 (function(){
-  let sx = 0, sy = 0, on = false, cur, prev;
+  let sx = 0, sy = 0, on = false, cur, prev, t0 = 0;
   document.addEventListener("touchstart", e => {
     const t = e.touches[0];
     if (stack.length < 2 || t.clientX > 24) return;
-    on = true; sx = t.clientX; sy = t.clientY; cur = stack[stack.length-1].el; prev = stack[stack.length-2].el;
+    on = true; sx = t.clientX; sy = t.clientY; t0 = performance.now(); cur = stack[stack.length-1].el; prev = stack[stack.length-2].el;
     cur.classList.add("dragging"); prev.classList.add("dragging");
   }, {passive:true});
   document.addEventListener("touchmove", e => {
@@ -541,7 +542,7 @@ function replaceTop(make){
     if (!on) return; on = false;
     const dx = e.changedTouches[0].clientX - sx;
     cur.classList.remove("dragging"); prev.classList.remove("dragging");
-    if (dx > innerWidth * 0.33) pop();
+    if (dx > innerWidth * 0.33 || (dx > 40 && performance.now() - t0 < 250)) pop();
     else { cur.style.transform = ""; prev.style.transform = ""; }
   });
 })();
@@ -549,14 +550,16 @@ function replaceTop(make){
 // ---------- shared screen chrome ----------
 function screenShell({paper = false, backLabel, title, right = []}){
   const root = h("section", {class: "screen" + (paper ? " paper" : "")});
-  const el = h("div", {class:"scroll"});
+  const sc = h("div", {class:"scroll"});
+  const el = h("div", {class:"inner"});
+  sc.append(el);
   const nav = h("header", {class:"nav"},
     h("div", {class:"l"}, backLabel ? h("button", {class:"navbtn", onclick: pop, "aria-label":"戻る"}, h("span", {html:I.back}), backLabel) : null),
     h("div", {class:"t"}, title || ""),
     h("div", {class:"r"}, right));
-  root.append(el, nav);
+  root.append(sc, nav);
   let on = false;
-  el.addEventListener("scroll", () => { const v = el.scrollTop > 30; if (v !== on){ on = v; nav.classList.toggle("scrolled", v); } }, {passive:true});
+  sc.addEventListener("scroll", () => { const v = sc.scrollTop > 30; if (v !== on){ on = v; nav.classList.toggle("scrolled", v); } }, {passive:true});
   return {el, nav, root};
 }
 function setNavTitle(nav, text){ nav.querySelector(".t").textContent = text; }
@@ -693,11 +696,17 @@ function noteRow(n, {showFolder = false, trash = false, onChange} = {}){
     if (a.cls === "a-del" && !trash){ collapse(() => a.fn()); return; }
     a.fn();
   }
-  let x0 = 0, y0 = 0, dx = 0, mode = null, isOpen = false, lp = null, longFired = false;
+  let x0 = 0, y0 = 0, dx = 0, raw = 0, mode = null, isOpen = false, lp = null, longFired = false;
+  // past the buttons (or to the right) the row keeps following the finger, but more and more slowly
+  const rubber = x => {
+    if (x > 0) return trash ? x * 0.25 : 90 * (1 - Math.exp(-x / 120)) + x * 0.25;
+    if (x < -W) return -W - (-x - W) * 0.55;
+    return x;
+  };
   function close(){ inner.style.transform = ""; isOpen = false; wrap.classList.remove("leading"); if (openSwipe === close) openSwipe = null; }
   inner.addEventListener("touchstart", e => {
     if (openSwipe && openSwipe !== close) openSwipe();
-    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; mode = null; dx = 0; longFired = false;
+    x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; mode = null; dx = 0; raw = 0; longFired = false;
     clearTimeout(lp);
     if (!trash) lp = setTimeout(() => { longFired = true; inner.classList.add("pressed"); rowMenu(); }, 500);
   }, {passive:true});
@@ -707,17 +716,17 @@ function noteRow(n, {showFolder = false, trash = false, onChange} = {}){
     if (!mode) mode = Math.abs(mx) > Math.abs(my) + 4 && x0 > 30 ? "x" : (Math.abs(my) > 6 ? "y" : null);
     if (mode !== "x") return;
     const base = isOpen ? -W : 0;
-    dx = base + mx;
-    if (trash) dx = Math.min(0, dx);
-    dx = Math.max(-innerWidth * 0.85, Math.min(innerWidth * 0.5, dx));
+    raw = base + mx;
+    if (trash) raw = Math.min(W * 0.25, raw);
+    dx = rubber(raw);
     wrap.classList.toggle("leading", dx > 0);
     inner.classList.add("drag"); inner.style.transform = "translateX(" + dx + "px)";
   }, {passive:true});
   inner.addEventListener("touchend", () => {
     clearTimeout(lp); inner.classList.remove("drag");
     if (mode !== "x") return;
-    if (dx > 70 && !trash){ close(); run(acts[0]); return; }                       // swipe right: pin
-    if (dx < -innerWidth * 0.55 && !trash){ inner.style.transform = "translateX(-100%)"; run(acts[acts.length - 1]); return; } // full swipe: delete
+    if (raw > 80 && !trash){ close(); run(acts[0]); return; }                      // swipe right: pin
+    if (raw < -innerWidth * 0.7 && !trash){ inner.style.transform = "translateX(-100%)"; run(acts[acts.length - 1]); return; } // full swipe: delete
     if (dx < -W / 2){ inner.style.transform = "translateX(" + (-W) + "px)"; isOpen = true; openSwipe = close; }
     else close();
   });
